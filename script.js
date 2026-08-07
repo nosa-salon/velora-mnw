@@ -7,7 +7,6 @@ const systemUsers = {
     nesma: { name: "نسمة", role: "متابعة المبيعات", pass: "nesma123", access: ["dashboard", "orders"] }
 };
 
-// استخدام sessionStorage بدلاً من localStorage لضمان استقلال كل تبويب بروح حسابة المنفصل عند الـ Refresh
 let currentUser = JSON.parse(sessionStorage.getItem('velora_current_user')) || null;
 
 const defaultProducts = [
@@ -160,7 +159,7 @@ function renderNotifications() {
         list.innerHTML = relevantNotifs.map(n => `
             <div class="notification-item">
                 <p>قامت <strong>${n.assistantName}</strong> بإنشاء أوردر:</p>
-                <p style="margin-top:4px;">العميل: <strong>${n.customerName}</strong></p>
+                <p style="margin-top:4px;">العميل: <strong>${n.customerName}</strong> (هاتف: ${n.phone})</p>
                 <p>المنتج: <strong>${n.productName}</strong> (العدد: ${n.qty})</p>
                 <p>الإجمالي: <strong style="color:var(--success);">${n.total} ج.م</strong></p>
             </div>
@@ -206,6 +205,12 @@ let isPosInitialized = false;
 function initPOSForm() {
     const productSelect = document.getElementById('order-product-select');
     const searchProdInput = document.getElementById('product-filter-search');
+    const shippingInput = document.getElementById('order-shipping');
+
+    // جعل قيمة الشحن تبدأ بـ 0 افتراضياً ليقوم المستخدم بكتابتها يدوياً
+    if (shippingInput && !shippingInput.value) {
+        shippingInput.value = "0";
+    }
 
     const getActiveStockKey = () => {
         if (currentUser.key === 'poultry') return 'poultry';
@@ -224,20 +229,20 @@ function initPOSForm() {
         calcTotal();
     };
 
+    const calcTotal = () => {
+        const selectedOpt = productSelect.options[productSelect.selectedIndex];
+        const price = selectedOpt ? parseFloat(selectedOpt.getAttribute('data-price')) : 0;
+        const qty = parseInt(document.getElementById('order-qty').value) || 1;
+        const shipping = parseFloat(document.getElementById('order-shipping').value) || 0;
+        document.getElementById('calc-grand-total').innerText = (price * qty) + shipping;
+    };
+
     if(!isPosInitialized) {
         searchProdInput.addEventListener('input', (e) => updateProductDropdown(e.target.value));
 
-        const calcTotal = () => {
-            const selectedOpt = productSelect.options[productSelect.selectedIndex];
-            const price = selectedOpt ? parseFloat(selectedOpt.getAttribute('data-price')) : 0;
-            const qty = parseInt(document.getElementById('order-qty').value) || 1;
-            const shipping = parseFloat(document.getElementById('order-shipping').value) || 0;
-            document.getElementById('calc-grand-total').innerText = (price * qty) + shipping;
-        };
-
         productSelect.addEventListener('change', calcTotal);
         document.getElementById('order-qty').addEventListener('input', calcTotal);
-        document.getElementById('order-shipping').addEventListener('input', calcTotal);
+        shippingInput.addEventListener('input', calcTotal);
 
         document.getElementById('submit-order-btn').addEventListener('click', (e) => {
             e.preventDefault();
@@ -248,7 +253,7 @@ function initPOSForm() {
             const address = document.getElementById('cust-address').value.trim();
 
             if(!customerName || !phone || !address) {
-                alert('يرجى ملء جميع بيانات العميل الأساسية (الاسم، الهاتف، العنوان)!');
+                alert('يرجى ملء جميع بيانات العميل الأساسية (الاسم، رقم الهاتف، والعنوان)!');
                 return;
             }
 
@@ -271,7 +276,7 @@ function initPOSForm() {
             prod.stock[stockKey] -= qty;
 
             const newId = (1050 + orders.length).toString();
-            const shipping = parseFloat(document.getElementById('order-shipping').value) || 0;
+            const shipping = parseFloat(shippingInput.value) || 0;
             const total = (prod.price * qty) + shipping;
             const state = document.getElementById('cust-state').value;
 
@@ -279,6 +284,7 @@ function initPOSForm() {
                 notifications.unshift({
                     assistantName: currentUser.name,
                     customerName: customerName,
+                    phone: phone,
                     productName: prod.name,
                     qty: qty,
                     total: total,
@@ -304,6 +310,7 @@ function initPOSForm() {
                 productId: prod.id,
                 stockKeyUsed: stockKey,
                 qty: qty,
+                shipping: shipping,
                 total: total,
                 status: "جديد",
                 createdBy: currentUser.name
@@ -321,6 +328,8 @@ function initPOSForm() {
             document.getElementById('cust-phone').value = '';
             document.getElementById('cust-address').value = '';
             document.getElementById('order-qty').value = '1';
+            shippingInput.value = '0';
+            calcTotal();
 
             alert(`تم إنشاء الفاتورة بنجاح برقم #${newId} وتم الخصم من رصيد (${currentUser.name})!`);
         });
@@ -483,9 +492,9 @@ function renderOrders() {
             <tr>
                 <td><strong>#${o.id}</strong></td>
                 <td><span style="color:var(--primary); font-weight:600;"><i class="fa-solid fa-store"></i> ${o.createdBy}</span></td>
-                <td><strong>${o.customerName}</strong><br><span style="color:var(--text-muted); font-size:0.85rem;">${o.productName} (العدد: ${o.qty})</span></td>
+                <td><strong>${o.customerName}</strong><br><span style="color:var(--text-muted); font-size:0.85rem;">هاتف: ${o.phone} | ${o.productName} (العدد: ${o.qty})</span></td>
                 <td><strong style="color:var(--success);">${o.total} ج.م</strong></td>
-                <td><span class="badge-status status-${o.status.replace(/\s+/g, '-')}}">${o.status}</span></td>
+                <td><span class="badge-status status-${o.status.replace(/\s+/g, '-')}">${o.status}</span></td>
                 <td>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                         ${canManage && o.status !== 'مرتجع' ? (o.status !== 'تم التسليم' ? `<button class="btn-secondary" onclick="advanceOrderStatus('${o.id}')">${nextStepText}</button>` : '<span style="color:var(--success); font-weight:bold; font-size:0.85rem;">منتهي</span>') : ''}
