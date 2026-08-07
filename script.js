@@ -1,3 +1,15 @@
+// ==========================================
+// إعدادات الربط السحابي (Firebase Realtime Database)
+// ==========================================
+const firebaseConfig = {
+    databaseURL: "https://velora-system-default-rtdb.firebaseio.com/"
+};
+
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const dbRef = firebase.database().ref('velora_system_data');
+
 const systemUsers = {
     admin: { name: "الآدمن الرئيسي", role: "Admin", pass: "admin123", access: ["dashboard", "pos-order", "inventory", "orders", "customers", "reports"] },
     dohaa: { name: "دعاء", role: "مساعد إدارة", pass: "dohaa123", access: ["pos-order", "inventory", "orders", "customers"] },
@@ -15,10 +27,41 @@ const defaultProducts = [
     { id: 3, name: "أحمر شفاه مطفي ثابت", price: 120, stock: { admin: 25, poultry: 10, gardens: 8 } }
 ];
 
-let products = JSON.parse(localStorage.getItem('velora_products')) || defaultProducts;
-let orders = JSON.parse(localStorage.getItem('velora_orders')) || [];
-let customers = JSON.parse(localStorage.getItem('velora_customers')) || [];
-let notifications = JSON.parse(localStorage.getItem('velora_notifications')) || [];
+let products = [];
+let orders = [];
+let customers = [];
+let notifications = [];
+
+// جلب وتحديث البيانات لحظياً من سحابة Firebase (يعمل على تزامن الموبايل واللاب توب فورا)
+dbRef.on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+        products = data.products || defaultProducts;
+        orders = data.orders || [];
+        customers = data.customers || [];
+        notifications = data.notifications || [];
+    } else {
+        products = defaultProducts;
+        saveDataToCloud();
+    }
+    if(currentUser) {
+        renderDashboard();
+        renderOrders();
+        renderProductsInventory();
+        renderCustomers();
+        renderReports();
+        renderNotifications();
+    }
+});
+
+function saveDataToCloud() {
+    dbRef.set({
+        products: products,
+        orders: orders,
+        customers: customers,
+        notifications: notifications
+    });
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     initLogin();
@@ -150,13 +193,12 @@ function initNotificationsUI() {
 function renderNotifications() {
     const badge = document.getElementById('notif-badge');
     const list = document.getElementById('notifications-list');
+    if(!badge || !list) return;
 
-    const relevantNotifs = notifications;
-
-    if(relevantNotifs.length > 0) {
+    if(notifications.length > 0) {
         badge.style.display = 'flex';
-        badge.innerText = relevantNotifs.length;
-        list.innerHTML = relevantNotifs.map(n => `
+        badge.innerText = notifications.length;
+        list.innerHTML = notifications.map(n => `
             <div class="notification-item">
                 <p>قامت <strong>${n.assistantName}</strong> بإنشاء أوردر:</p>
                 <p style="margin-top:4px;">العميل: <strong>${n.customerName}</strong> (هاتف: ${n.phone})</p>
@@ -172,15 +214,8 @@ function renderNotifications() {
 
 function clearNotifications() {
     notifications = [];
-    localStorage.removeItem('velora_notifications');
+    saveDataToCloud();
     renderNotifications();
-}
-
-function saveData() {
-    localStorage.setItem('velora_products', JSON.stringify(products));
-    localStorage.setItem('velora_orders', JSON.stringify(orders));
-    localStorage.setItem('velora_customers', JSON.stringify(customers));
-    localStorage.setItem('velora_notifications', JSON.stringify(notifications));
 }
 
 function renderDashboard() {
@@ -191,14 +226,17 @@ function renderDashboard() {
     const dohaaTotal = validOrders.filter(o => o.createdBy === 'دعاء').reduce((s,o)=>s+o.total,0);
     const monaTotal = validOrders.filter(o => o.createdBy === 'منى').reduce((s,o)=>s+o.total,0);
 
-    document.getElementById('dashboard-stats').innerHTML = `
-        <div class="stat-card"><div class="icon"><i class="fa-solid fa-shopping-bag"></i></div><div class="info"><span>إجمالي الطلبات النشطة</span><h3>${validOrders.length}</h3></div></div>
-        <div class="stat-card"><div class="icon"><i class="fa-solid fa-money-bill-wave"></i></div><div class="info"><span>إجمالي المبيعات العامة</span><h3>${validOrders.reduce((s,o)=>s+o.total,0)} ج.م</h3></div></div>
-        <div class="stat-card"><div class="icon"><i class="fa-solid fa-store"></i></div><div class="info"><span>مبيعات فرع الدواجن</span><h3>${poultryTotal} ج.م</h3></div></div>
-        <div class="stat-card"><div class="icon"><i class="fa-solid fa-store"></i></div><div class="info"><span>مبيعات فرع الحدايق</span><h3>${gardensTotal} ج.م</h3></div></div>
-        <div class="stat-card"><div class="icon"><i class="fa-solid fa-user-tie"></i></div><div class="info"><span>مبيعات دعاء</span><h3>${dohaaTotal} ج.م</h3></div></div>
-        <div class="stat-card"><div class="icon"><i class="fa-solid fa-user-tie"></i></div><div class="info"><span>مبيعات منى</span><h3>${monaTotal} ج.م</h3></div></div>
-    `;
+    const statsEl = document.getElementById('dashboard-stats');
+    if(statsEl) {
+        statsEl.innerHTML = `
+            <div class="stat-card"><div class="icon"><i class="fa-solid fa-shopping-bag"></i></div><div class="info"><span>إجمالي الطلبات النشطة</span><h3>${validOrders.length}</h3></div></div>
+            <div class="stat-card"><div class="icon"><i class="fa-solid fa-money-bill-wave"></i></div><div class="info"><span>إجمالي المبيعات العامة</span><h3>${validOrders.reduce((s,o)=>s+o.total,0)} ج.م</h3></div></div>
+            <div class="stat-card"><div class="icon"><i class="fa-solid fa-store"></i></div><div class="info"><span>مبيعات فرع الدواجن</span><h3>${poultryTotal} ج.م</h3></div></div>
+            <div class="stat-card"><div class="icon"><i class="fa-solid fa-store"></i></div><div class="info"><span>مبيعات فرع الحدايق</span><h3>${gardensTotal} ج.م</h3></div></div>
+            <div class="stat-card"><div class="icon"><i class="fa-solid fa-user-tie"></i></div><div class="info"><span>مبيعات دعاء</span><h3>${dohaaTotal} ج.م</h3></div></div>
+            <div class="stat-card"><div class="icon"><i class="fa-solid fa-user-tie"></i></div><div class="info"><span>مبيعات منى</span><h3>${monaTotal} ج.م</h3></div></div>
+        `;
+    }
 }
 
 let isPosInitialized = false;
@@ -207,7 +245,6 @@ function initPOSForm() {
     const searchProdInput = document.getElementById('product-filter-search');
     const shippingInput = document.getElementById('order-shipping');
 
-    // جعل قيمة الشحن تبدأ بـ 0 افتراضياً ليقوم المستخدم بكتابتها يدوياً
     if (shippingInput && !shippingInput.value) {
         shippingInput.value = "0";
     }
@@ -219,6 +256,7 @@ function initPOSForm() {
     };
 
     const updateProductDropdown = (filter = "") => {
+        if(!productSelect) return;
         const stockKey = getActiveStockKey();
         const filtered = products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
         
@@ -230,109 +268,109 @@ function initPOSForm() {
     };
 
     const calcTotal = () => {
+        if(!productSelect) return;
         const selectedOpt = productSelect.options[productSelect.selectedIndex];
         const price = selectedOpt ? parseFloat(selectedOpt.getAttribute('data-price')) : 0;
         const qty = parseInt(document.getElementById('order-qty').value) || 1;
         const shipping = parseFloat(document.getElementById('order-shipping').value) || 0;
-        document.getElementById('calc-grand-total').innerText = (price * qty) + shipping;
+        const grandTotalEl = document.getElementById('calc-grand-total');
+        if(grandTotalEl) grandTotalEl.innerText = (price * qty) + shipping;
     };
 
     if(!isPosInitialized) {
-        searchProdInput.addEventListener('input', (e) => updateProductDropdown(e.target.value));
+        if(searchProdInput) searchProdInput.addEventListener('input', (e) => updateProductDropdown(e.target.value));
 
-        productSelect.addEventListener('change', calcTotal);
-        document.getElementById('order-qty').addEventListener('input', calcTotal);
-        shippingInput.addEventListener('input', calcTotal);
+        if(productSelect) productSelect.addEventListener('change', calcTotal);
+        const qtyInput = document.getElementById('order-qty');
+        if(qtyInput) qtyInput.addEventListener('input', calcTotal);
+        if(shippingInput) shippingInput.addEventListener('input', calcTotal);
 
-        document.getElementById('submit-order-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+        const submitBtn = document.getElementById('submit-order-btn');
+        if(submitBtn) {
+            submitBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
 
-            const customerName = document.getElementById('cust-name').value.trim();
-            const phone = document.getElementById('cust-phone').value.trim();
-            const address = document.getElementById('cust-address').value.trim();
+                const customerName = document.getElementById('cust-name').value.trim();
+                const phone = document.getElementById('cust-phone').value.trim();
+                const address = document.getElementById('cust-address').value.trim();
 
-            if(!customerName || !phone || !address) {
-                alert('يرجى ملء جميع بيانات العميل الأساسية (الاسم، رقم الهاتف، والعنوان)!');
-                return;
-            }
+                if(!customerName || !phone || !address) {
+                    alert('يرجى ملء جميع بيانات العميل الأساسية (الاسم، رقم الهاتف، والعنوان)!');
+                    return;
+                }
 
-            const prodId = productSelect.value;
-            const prod = products.find(p => p.id == prodId);
-            const qty = parseInt(document.getElementById('order-qty').value);
-            const stockKey = getActiveStockKey();
+                const prodId = productSelect.value;
+                const prod = products.find(p => p.id == prodId);
+                const qty = parseInt(document.getElementById('order-qty').value);
+                const stockKey = getActiveStockKey();
 
-            if(!prod) return;
+                if(!prod) return;
 
-            if(typeof prod.stock !== 'object') {
-                prod.stock = { admin: prod.stock || 0, poultry: 0, gardens: 0 };
-            }
+                if(typeof prod.stock !== 'object') {
+                    prod.stock = { admin: prod.stock || 0, poultry: 0, gardens: 0 };
+                }
 
-            if(prod.stock[stockKey] < qty) {
-                alert(`عذراً، الرصيد المتاح في حسابك (${currentUser.name}) لا يكفي للكمية المطلوبة!`);
-                return;
-            }
+                if(prod.stock[stockKey] < qty) {
+                    alert(`عذراً، الرصيد المتاح في حسابك (${currentUser.name}) لا يكفي للكمية المطلوبة!`);
+                    return;
+                }
 
-            prod.stock[stockKey] -= qty;
+                prod.stock[stockKey] -= qty;
 
-            const newId = (1050 + orders.length).toString();
-            const shipping = parseFloat(shippingInput.value) || 0;
-            const total = (prod.price * qty) + shipping;
-            const state = document.getElementById('cust-state').value;
+                const newId = (1050 + orders.length).toString();
+                const shipping = parseFloat(shippingInput.value) || 0;
+                const total = (prod.price * qty) + shipping;
+                const state = document.getElementById('cust-state').value;
 
-            if(currentUser.key !== 'admin') {
-                notifications.unshift({
-                    assistantName: currentUser.name,
+                if(currentUser.key !== 'admin') {
+                    notifications.unshift({
+                        assistantName: currentUser.name,
+                        customerName: customerName,
+                        phone: phone,
+                        productName: prod.name,
+                        qty: qty,
+                        total: total,
+                        time: new Date().toLocaleTimeString()
+                    });
+                }
+
+                let existingCust = customers.find(c => c.phone === phone);
+                if(existingCust) {
+                    existingCust.ordersCount += 1;
+                    existingCust.totalSpent += total;
+                } else {
+                    customers.push({ name: customerName, phone: phone, state: state, address: address, ordersCount: 1, totalSpent: total });
+                }
+
+                orders.unshift({
+                    id: newId,
                     customerName: customerName,
                     phone: phone,
+                    state: state,
+                    address: address,
                     productName: prod.name,
+                    productId: prod.id,
+                    stockKeyUsed: stockKey,
                     qty: qty,
+                    shipping: shipping,
                     total: total,
-                    time: new Date().toLocaleTimeString()
+                    status: "جديد",
+                    createdBy: currentUser.name
                 });
-            }
 
-            let existingCust = customers.find(c => c.phone === phone);
-            if(existingCust) {
-                existingCust.ordersCount += 1;
-                existingCust.totalSpent += total;
-            } else {
-                customers.push({ name: customerName, phone: phone, state: state, address: address, ordersCount: 1, totalSpent: total });
-            }
+                saveDataToCloud();
 
-            orders.unshift({
-                id: newId,
-                customerName: customerName,
-                phone: phone,
-                state: state,
-                address: address,
-                productName: prod.name,
-                productId: prod.id,
-                stockKeyUsed: stockKey,
-                qty: qty,
-                shipping: shipping,
-                total: total,
-                status: "جديد",
-                createdBy: currentUser.name
+                document.getElementById('cust-name').value = '';
+                document.getElementById('cust-phone').value = '';
+                document.getElementById('cust-address').value = '';
+                document.getElementById('order-qty').value = '1';
+                shippingInput.value = '0';
+                calcTotal();
+
+                alert(`تم إنشاء الفاتورة بنجاح برقم #${newId} وتم الخصم من رصيد (${currentUser.name}) وتحديثه سحابياً!`);
             });
-
-            saveData();
-            renderOrders();
-            renderProductsInventory();
-            renderCustomers();
-            renderDashboard();
-            renderNotifications();
-            updateProductDropdown();
-
-            document.getElementById('cust-name').value = '';
-            document.getElementById('cust-phone').value = '';
-            document.getElementById('cust-address').value = '';
-            document.getElementById('order-qty').value = '1';
-            shippingInput.value = '0';
-            calcTotal();
-
-            alert(`تم إنشاء الفاتورة بنجاح برقم #${newId} وتم الخصم من رصيد (${currentUser.name})!`);
-        });
+        }
 
         isPosInitialized = true;
     }
@@ -356,10 +394,13 @@ function initCustomerSearchAutoFill() {
 }
 
 function renderProductsInventory() {
+    const tbody = document.getElementById('inventory-table-body');
+    if(!tbody) return;
+
     const isAdminOrAssistant = (currentUser.key === 'admin' || currentUser.key === 'dohaa' || currentUser.key === 'mona');
     const isBranch = (currentUser.key === 'poultry' || currentUser.key === 'gardens');
 
-    document.getElementById('inventory-table-body').innerHTML = products.map(p => {
+    tbody.innerHTML = products.map(p => {
         if(typeof p.stock !== 'object') {
             p.stock = { admin: p.stock || 0, poultry: 0, gardens: 0 };
         }
@@ -397,9 +438,8 @@ function adminAddStock(id, targetKey) {
         if(p) {
             if(typeof p.stock !== 'object') p.stock = { admin: 0, poultry: 0, gardens: 0 };
             p.stock[targetKey] += parseInt(qty);
-            saveData();
-            renderProductsInventory();
-            alert(`تمت إضافة الرصيد بنجاح لـ ${targetName}!`);
+            saveDataToCloud();
+            alert(`تمت إضافة الرصيد بنجاح وتحديثه سحابياً لـ ${targetName}!`);
         }
     }
 }
@@ -412,9 +452,8 @@ function branchAddStock(id) {
         if(p) {
             if(typeof p.stock !== 'object') p.stock = { admin: 0, poultry: 0, gardens: 0 };
             p.stock[targetKey] += parseInt(qty);
-            saveData();
-            renderProductsInventory();
-            alert(`تمت إضافة الرصيد بنجاح لحسابك وسيظهر التحديث لدى الإدارة!`);
+            saveDataToCloud();
+            alert(`تمت إضافة الرصيد بنجاح لحسابك وسيظهر التحديث لدى الإدارة سحابياً!`);
         }
     }
 }
@@ -436,8 +475,7 @@ function advanceOrderStatus(id) {
         return;
     }
 
-    saveData();
-    renderOrders();
+    saveDataToCloud();
 }
 
 function makeReturnOrder(id) {
@@ -453,7 +491,7 @@ function makeReturnOrder(id) {
         return;
     }
 
-    if (confirm(`هل أنت متأكد من عمل مرتجع للأوردر #${o.id}؟ سيتم رد الكمية للمخزن وإلغاء المبلغ من الإحصائيات.`)) {
+    if (confirm(`هل أنت متأكد من عمل مرتجع للأوردر #${o.id}؟ سيتم رد الكمية للمخزن وإلغاء المبلغ.`)) {
         const p = products.find(item => item.id == o.productId);
         if (p) {
             if (typeof p.stock !== 'object') p.stock = { admin: 0, poultry: 0, gardens: 0 };
@@ -462,17 +500,16 @@ function makeReturnOrder(id) {
         }
 
         o.status = 'مرتجع';
-        saveData();
-        renderOrders();
-        renderProductsInventory();
-        renderDashboard();
-        renderReports();
-        alert('تم تسجيل المرتجع ورد الكمية للمخزن بنجاح.');
+        saveDataToCloud();
+        alert('تم تسجيل المرتجع ورد الكمية للمخزن وتحديث السحابة بنجاح.');
     }
 }
 
 function renderOrders() {
     if(!currentUser.access.includes('orders')) return;
+    const tbody = document.getElementById('orders-table-body');
+    if(!tbody) return;
+
     let filteredOrders = orders;
     if (currentUser.key === 'nesma') {
         filteredOrders = orders.filter(o => o.createdBy !== 'الآدمن الرئيسي' && o.createdBy !== 'الآدمن');
@@ -481,7 +518,7 @@ function renderOrders() {
     const canManage = (currentUser.key !== 'nesma');
     const isAdmin = (currentUser.key === 'admin');
 
-    document.getElementById('orders-table-body').innerHTML = filteredOrders.map(o => {
+    tbody.innerHTML = filteredOrders.map(o => {
         let nextStepText = "تقدم";
         if (o.status === 'جديد') nextStepText = 'بدء التجهيز';
         else if (o.status === 'جارٍ التجهيز') nextStepText = 'تم التجهيز';
@@ -509,7 +546,10 @@ function renderOrders() {
 
 function renderCustomers() {
     if(!currentUser.access.includes('customers')) return;
-    document.getElementById('customers-table-body').innerHTML = customers.map(c => `
+    const tbody = document.getElementById('customers-table-body');
+    if(!tbody) return;
+
+    tbody.innerHTML = customers.map(c => `
         <tr>
             <td>${c.name}</td>
             <td>${c.phone}</td>
@@ -522,8 +562,11 @@ function renderCustomers() {
 
 function renderReports() {
     if(!currentUser.access.includes('reports')) return;
+    const grid = document.getElementById('reports-stats-grid');
+    if(!grid) return;
+
     const validOrders = orders.filter(o => o.status !== 'مرتجع');
-    document.getElementById('reports-stats-grid').innerHTML = `
+    grid.innerHTML = `
         <div class="stat-card"><div class="icon"><i class="fa-solid fa-chart-line"></i></div><div class="info"><span>إجمالي المبيعات النشطة</span><h3>${validOrders.reduce((s,o)=>s+o.total,0)} ج.م</h3></div></div>
         <div class="stat-card"><div class="icon"><i class="fa-solid fa-users"></i></div><div class="info"><span>إجمالي العملاء المسجلين</span><h3>${customers.length} عميل</h3></div></div>
     `;
