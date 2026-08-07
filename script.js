@@ -395,7 +395,28 @@ function initCustomerSearchAutoFill() {
 
 function renderProductsInventory() {
     const tbody = document.getElementById('inventory-table-body');
-    if(!tbody) return;
+    const inventoryView = document.getElementById('inventory');
+    if(!tbody || !inventoryView) return;
+
+    // التأكد من وجود خانة إضافة منتج جديد الخاصة بالآدمن داخل قسم المخزن
+    let adminAddContainer = document.getElementById('admin-add-product-container');
+    if (!adminAddContainer) {
+        adminAddContainer = document.createElement('div');
+        adminAddContainer.id = 'admin-add-product-container';
+        adminAddContainer.style.cssText = "background:var(--card-bg); padding:20px; border-radius:10px; margin-bottom:20px; border:1px solid var(--border);";
+        adminAddContainer.innerHTML = `
+            <h4><i class="fa-solid fa-plus-circle"></i> إضافة منتج جديد للمخزن العام</h4>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                <input type="text" id="new-prod-name" placeholder="اسم المنتج الجديد" style="flex:2; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text);">
+                <input type="number" id="new-prod-price" placeholder="سعر البيع" style="flex:1; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text);">
+                <button class="btn-primary" onclick="adminAddNewProduct()" style="padding:8px 15px; cursor:pointer;">إضافة المنتج</button>
+            </div>
+        `;
+        inventoryView.insertBefore(adminAddContainer, inventoryView.firstChild);
+    }
+
+    // إظهار الخانة للآدمن فقط وإخفائها عن باقي الحسابات
+    adminAddContainer.style.display = (currentUser.key === 'admin') ? 'block' : 'none';
 
     const isAdminOrAssistant = (currentUser.key === 'admin' || currentUser.key === 'dohaa' || currentUser.key === 'mona');
     const isBranch = (currentUser.key === 'poultry' || currentUser.key === 'gardens');
@@ -425,6 +446,35 @@ function renderProductsInventory() {
             </tr>
         `;
     }).join('');
+}
+
+function adminAddNewProduct() {
+    const nameInput = document.getElementById('new-prod-name');
+    const priceInput = document.getElementById('new-prod-price');
+    
+    if(!nameInput || !priceInput) return;
+    
+    const name = nameInput.value.trim();
+    const price = parseFloat(priceInput.value);
+
+    if (!name || isNaN(price) || price <= 0) {
+        alert("يرجى إدخال اسم المنتج وصحيح السعر بشكل سليم!");
+        return;
+    }
+
+    const newProduct = {
+        id: Date.now(),
+        name: name,
+        price: price,
+        stock: { admin: 0, poultry: 0, gardens: 0 }
+    };
+
+    products.push(newProduct);
+    saveDataToCloud(); 
+    
+    nameInput.value = '';
+    priceInput.value = '';
+    alert("تم إضافة المنتج بنجاح وظهر في جميع الحسابات والمخازن سحابياً!");
 }
 
 function adminAddStock(id, targetKey) {
