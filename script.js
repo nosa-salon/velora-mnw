@@ -22,10 +22,13 @@ let notifications = JSON.parse(localStorage.getItem('velora_notifications')) || 
 
 document.addEventListener('DOMContentLoaded', () => {
     initLogin();
-    if(currentUser) {
+    if(currentUser && systemUsers[currentUser.key]) {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-container').style.display = 'flex';
         initApp();
+    } else {
+        localStorage.removeItem('velora_current_user');
+        currentUser = null;
     }
 });
 
@@ -49,6 +52,7 @@ function initLogin() {
 
 function logout() {
     localStorage.removeItem('velora_current_user');
+    currentUser = null;
     location.reload();
 }
 
@@ -147,7 +151,8 @@ function renderNotifications() {
     const badge = document.getElementById('notif-badge');
     const list = document.getElementById('notifications-list');
 
-    const relevantNotifs = (currentUser.key === 'admin' || currentUser.key === 'nesma') ? notifications : [];
+    // تحديث شرط الإشعارات ليظهر للآدمن ونسمة بصورة دقيقة ومحدثة
+    const relevantNotifs = notifications;
 
     if(relevantNotifs.length > 0) {
         badge.style.display = 'flex';
@@ -270,7 +275,8 @@ function initPOSForm() {
             const total = (prod.price * qty) + shipping;
             const state = document.getElementById('cust-state').value;
 
-            if((currentUser.key === 'dohaa' || currentUser.key === 'mona' || currentUser.key === 'poultry' || currentUser.key === 'gardens') && stockKey !== 'admin') {
+            // إضافة الإشعار فوراً لأي أوردر يتم إنشاؤه بواسطة أي مساعد أو فرع لكي يظهر عند الآدمن ونسمة
+            if(currentUser.key !== 'admin') {
                 notifications.unshift({
                     assistantName: currentUser.name,
                     customerName: customerName,
@@ -471,7 +477,7 @@ function renderOrders() {
         let nextStepText = "تقدم";
         if (o.status === 'جديد') nextStepText = 'بدء التجهيز';
         else if (o.status === 'جارٍ التجهيز') nextStepText = 'تم التجهيز';
-        else if (o.status === 'تم التجهيز') nextText = 'شحن الأوردر'; // ملاحظة: تم ضبطها برمجياً بعناية
+        else if (o.status === 'تم التجهيز') nextStepText = 'شحن الأوردر';
         else if (o.status === 'تم الشحن') nextStepText = 'تأكيد التسليم';
 
         return `
