@@ -2,7 +2,7 @@
 // إعدادات الربط السحابي (Firebase Realtime Database)
 // ==========================================
 const firebaseConfig = {
-    databaseURL: "https://velora-system-default-rtdb.firebaseio.com/"
+    databaseURL: "https://velora-7e499-default-rtdb.firebaseio.com/"
 };
 
 if (!firebase.apps.length) {
@@ -32,7 +32,7 @@ let orders = [];
 let customers = [];
 let notifications = [];
 
-// جلب وتحديث البيانات لحظياً من سحابة Firebase (يعمل على تزامن الموبايل واللاب توب فورا)
+// جلب وتحديث البيانات لحظياً من سحابة Firebase
 dbRef.on('value', (snapshot) => {
     const data = snapshot.val();
     if (data) {
