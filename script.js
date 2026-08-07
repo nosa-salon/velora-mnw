@@ -320,7 +320,8 @@ function initPOSForm() {
 
                 const newId = (1050 + orders.length).toString();
                 const shipping = parseFloat(shippingInput.value) || 0;
-                const total = (prod.price * qty) + shipping;
+                const productSubtotal = prod.price * qty;
+                const total = productSubtotal + shipping;
                 const state = document.getElementById('cust-state').value;
 
                 if(currentUser.key !== 'admin') {
@@ -354,6 +355,7 @@ function initPOSForm() {
                     stockKeyUsed: stockKey,
                     qty: qty,
                     shipping: shipping,
+                    productSubtotal: productSubtotal,
                     total: total,
                     status: "جديد",
                     createdBy: currentUser.name
@@ -608,14 +610,16 @@ function renderOrders() {
         else if (o.status === 'تم الشحن') nextStepText = 'تأكيد التسليم';
 
         const shippingValue = (typeof o.shipping !== 'undefined' && !isNaN(o.shipping)) ? o.shipping : 0;
+        // حساب إجمالي المنتجات لو البيانات القديمة مش مسجلة فيها
+        const productSubtotal = (typeof o.productSubtotal !== 'undefined' && !isNaN(o.productSubtotal)) ? o.productSubtotal : (o.total - shippingValue);
 
         return `
             <tr>
                 <td><strong>#${o.id}</strong></td>
                 <td><span style="color:var(--primary); font-weight:600;"><i class="fa-solid fa-store"></i> ${o.createdBy}</span></td>
                 <td><strong>${o.customerName}</strong><br><span style="color:var(--text-muted); font-size:0.85rem;">هاتف: ${o.phone} | ${o.productName} (العدد: ${o.qty})</span></td>
+                <td><strong style="color:var(--success);">${productSubtotal} ج.م</strong></td>
                 <td><span style="font-weight:bold; color:var(--text);">${shippingValue} ج.م</span></td>
-                <td><strong style="color:var(--success);">${o.total} ج.م</strong></td>
                 <td><span class="badge-status status-${o.status.replace(/\s+/g, '-')}">${o.status}</span></td>
                 <td>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
