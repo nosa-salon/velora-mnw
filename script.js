@@ -607,11 +607,14 @@ function renderOrders() {
         else if (o.status === 'تم التجهيز') nextStepText = 'شحن الأوردر';
         else if (o.status === 'تم الشحن') nextStepText = 'تأكيد التسليم';
 
+        const shippingValue = (typeof o.shipping !== 'undefined' && !isNaN(o.shipping)) ? o.shipping : 0;
+
         return `
             <tr>
                 <td><strong>#${o.id}</strong></td>
                 <td><span style="color:var(--primary); font-weight:600;"><i class="fa-solid fa-store"></i> ${o.createdBy}</span></td>
                 <td><strong>${o.customerName}</strong><br><span style="color:var(--text-muted); font-size:0.85rem;">هاتف: ${o.phone} | ${o.productName} (العدد: ${o.qty})</span></td>
+                <td><span style="font-weight:bold; color:var(--text);">${shippingValue} ج.م</span></td>
                 <td><strong style="color:var(--success);">${o.total} ج.م</strong></td>
                 <td><span class="badge-status status-${o.status.replace(/\s+/g, '-')}">${o.status}</span></td>
                 <td>
@@ -624,7 +627,7 @@ function renderOrders() {
                 </td>
             </tr>
         `;
-    }).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد طلبات مسجلة حالياً</td></tr>';
+    }).join('') || '<tr><td colspan="7" style="text-align:center;">لا توجد طلبات مسجلة حالياً</td></tr>';
 }
 
 function renderCustomers() {
