@@ -591,6 +591,28 @@ function deleteOrder(id) {
 
 function renderOrders() {
     if(!currentUser.access.includes('orders')) return;
+    
+    // تحديث عناوين الأعمدة في الجدول HTML لتعكس الترتيب المطلوب
+    const tableHeaderRow = document.querySelector('#orders table thead tr, .orders-table thead tr, table thead tr');
+    // سنضمن بناء هيدر الجدول بشكل صحيح إذا كان موجوداً
+    const ordersTable = document.querySelector('#orders table, .orders-table, table');
+    if (ordersTable) {
+        const thead = ordersTable.querySelector('thead');
+        if (thead) {
+            thead.innerHTML = `
+                <tr>
+                    <th>رقم الطلب</th>
+                    <th>الفرع / المُدخل</th>
+                    <th>العميل والمنتج</th>
+                    <th>الإجمالي</th>
+                    <th>مصاريف الشحن</th>
+                    <th>الحالة</th>
+                    <th>إجراءات الإدارة</th>
+                </tr>
+            `;
+        }
+    }
+
     const tbody = document.getElementById('orders-table-body');
     if(!tbody) return;
 
@@ -610,7 +632,6 @@ function renderOrders() {
         else if (o.status === 'تم الشحن') nextStepText = 'تأكيد التسليم';
 
         const shippingValue = (typeof o.shipping !== 'undefined' && !isNaN(o.shipping)) ? o.shipping : 0;
-        // حساب إجمالي المنتجات لو البيانات القديمة مش مسجلة فيها
         const productSubtotal = (typeof o.productSubtotal !== 'undefined' && !isNaN(o.productSubtotal)) ? o.productSubtotal : (o.total - shippingValue);
 
         return `
