@@ -398,7 +398,6 @@ function renderProductsInventory() {
     const inventoryView = document.getElementById('inventory');
     if(!tbody || !inventoryView) return;
 
-    // التأكد من وجود خانة إضافة منتج جديد الخاصة بالآدمن داخل قسم المخزن
     let adminAddContainer = document.getElementById('admin-add-product-container');
     if (!adminAddContainer) {
         adminAddContainer = document.createElement('div');
@@ -415,11 +414,11 @@ function renderProductsInventory() {
         inventoryView.insertBefore(adminAddContainer, inventoryView.firstChild);
     }
 
-    // إظهار الخانة للآدمن فقط وإخفائها عن باقي الحسابات
     adminAddContainer.style.display = (currentUser.key === 'admin') ? 'block' : 'none';
 
     const isAdminOrAssistant = (currentUser.key === 'admin' || currentUser.key === 'dohaa' || currentUser.key === 'mona');
     const isBranch = (currentUser.key === 'poultry' || currentUser.key === 'gardens');
+    const isAdmin = (currentUser.key === 'admin');
 
     tbody.innerHTML = products.map(p => {
         if(typeof p.stock !== 'object') {
@@ -428,7 +427,15 @@ function renderProductsInventory() {
 
         return `
             <tr>
-                <td><strong>${p.name}</strong><br><span style="color:var(--text-muted);">${p.price} ج.م</span></td>
+                <td>
+                    <strong>${p.name}</strong><br>
+                    <span style="color:var(--text-muted);">${p.price} ج.م</span>
+                    ${isAdmin ? `
+                        <div style="margin-top:5px;">
+                            <button class="btn-secondary" style="font-size:0.75rem; padding:2px 6px;" onclick="adminChangePrice(${p.id})"><i class="fa-solid fa-pen"></i> تعديل السعر</button>
+                        </div>
+                    ` : ''}
+                </td>
                 <td><span style="color:var(--primary); font-weight:bold; font-size:1.05rem;">${p.stock.admin}</span></td>
                 <td><span style="font-weight:bold; font-size:1.05rem;">${p.stock.poultry}</span></td>
                 <td><span style="font-weight:bold; font-size:1.05rem;">${p.stock.gardens}</span></td>
@@ -458,7 +465,7 @@ function adminAddNewProduct() {
     const price = parseFloat(priceInput.value);
 
     if (!name || isNaN(price) || price <= 0) {
-        alert("يرجى إدخال اسم المنتج وصحيح السعر بشكل سليم!");
+        alert("يرجى إدخال اسم المنتج وسعر صحيح بشكل سليم!");
         return;
     }
 
@@ -475,6 +482,18 @@ function adminAddNewProduct() {
     nameInput.value = '';
     priceInput.value = '';
     alert("تم إضافة المنتج بنجاح وظهر في جميع الحسابات والمخازن سحابياً!");
+}
+
+function adminChangePrice(id) {
+    const p = products.find(item => item.id === id);
+    if(!p) return;
+
+    const newPrice = prompt(`أدخل سعر البيع الجديد للمنتج (${p.name}):`, p.price);
+    if(newPrice !== null && !isNaN(newPrice) && parseFloat(newPrice) > 0) {
+        p.price = parseFloat(newPrice);
+        saveDataToCloud();
+        alert("تم تعديل السعر بنجاح وتحديثه في جميع الحسابات (أجهزة المبيعات والفروع) تلقائياً!");
+    }
 }
 
 function adminAddStock(id, targetKey) {
@@ -555,6 +574,19 @@ function makeReturnOrder(id) {
     }
 }
 
+function deleteOrder(id) {
+    if (currentUser.key !== 'admin') {
+        alert('خاصية حذف الحجوزات والأوردرات مخصصة للحساب الرئيسي (الآدمن) فقط.');
+        return;
+    }
+
+    if (confirm(`هل أنت متأكد تماماً من حذف الأوردر #${id} نهائياً لتفريغ المساحة؟`)) {
+        orders = orders.filter(o => o.id !== id);
+        saveDataToCloud();
+        alert('تم حذف الأوردر نهائياً وتحديث النظام سحابياً.');
+    }
+}
+
 function renderOrders() {
     if(!currentUser.access.includes('orders')) return;
     const tbody = document.getElementById('orders-table-body');
@@ -587,6 +619,7 @@ function renderOrders() {
                         ${canManage && o.status !== 'مرتجع' ? (o.status !== 'تم التسليم' ? `<button class="btn-secondary" onclick="advanceOrderStatus('${o.id}')">${nextStepText}</button>` : '<span style="color:var(--success); font-weight:bold; font-size:0.85rem;">منتهي</span>') : ''}
                         ${isAdmin && o.status !== 'مرتجع' ? `<button class="btn-danger" onclick="makeReturnOrder('${o.id}')"><i class="fa-solid fa-rotate-left"></i> مرتجع</button>` : ''}
                         ${o.status === 'مرتجع' ? '<span style="color:var(--danger); font-weight:bold;">تم الإرجاع</span>' : ''}
+                        ${isAdmin ? `<button class="btn-danger" style="background:#444;" onclick="deleteOrder('${o.id}')"><i class="fa-solid fa-trash"></i> حذف</button>` : ''}
                     </div>
                 </td>
             </tr>
