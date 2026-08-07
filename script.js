@@ -7,7 +7,8 @@ const systemUsers = {
     nesma: { name: "نسمة", role: "متابعة المبيعات", pass: "nesma123", access: ["dashboard", "orders"] }
 };
 
-let currentUser = JSON.parse(localStorage.getItem('velora_current_user')) || null;
+// استخدام sessionStorage بدلاً من localStorage لضمان استقلال كل تبويب بروح حسابة المنفصل عند الـ Refresh
+let currentUser = JSON.parse(sessionStorage.getItem('velora_current_user')) || null;
 
 const defaultProducts = [
     { id: 1, name: "مجموعة العناية بالبشرة كافيار بلس", price: 390, stock: { admin: 15, poultry: 5, gardens: 5 } },
@@ -27,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('app-container').style.display = 'flex';
         initApp();
     } else {
-        localStorage.removeItem('velora_current_user');
+        sessionStorage.removeItem('velora_current_user');
         currentUser = null;
     }
 });
@@ -40,7 +41,7 @@ function initLogin() {
 
         if(systemUsers[userKey] && systemUsers[userKey].pass === passInput) {
             currentUser = { key: userKey, ...systemUsers[userKey] };
-            localStorage.setItem('velora_current_user', JSON.stringify(currentUser));
+            sessionStorage.setItem('velora_current_user', JSON.stringify(currentUser));
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-container').style.display = 'flex';
             initApp();
@@ -51,7 +52,7 @@ function initLogin() {
 }
 
 function logout() {
-    localStorage.removeItem('velora_current_user');
+    sessionStorage.removeItem('velora_current_user');
     currentUser = null;
     location.reload();
 }
@@ -151,7 +152,6 @@ function renderNotifications() {
     const badge = document.getElementById('notif-badge');
     const list = document.getElementById('notifications-list');
 
-    // تحديث شرط الإشعارات ليظهر للآدمن ونسمة بصورة دقيقة ومحدثة
     const relevantNotifs = notifications;
 
     if(relevantNotifs.length > 0) {
@@ -275,7 +275,6 @@ function initPOSForm() {
             const total = (prod.price * qty) + shipping;
             const state = document.getElementById('cust-state').value;
 
-            // إضافة الإشعار فوراً لأي أوردر يتم إنشاؤه بواسطة أي مساعد أو فرع لكي يظهر عند الآدمن ونسمة
             if(currentUser.key !== 'admin') {
                 notifications.unshift({
                     assistantName: currentUser.name,
@@ -486,7 +485,7 @@ function renderOrders() {
                 <td><span style="color:var(--primary); font-weight:600;"><i class="fa-solid fa-store"></i> ${o.createdBy}</span></td>
                 <td><strong>${o.customerName}</strong><br><span style="color:var(--text-muted); font-size:0.85rem;">${o.productName} (العدد: ${o.qty})</span></td>
                 <td><strong style="color:var(--success);">${o.total} ج.م</strong></td>
-                <td><span class="badge-status status-${o.status.replace(/\s+/g, '-')}">${o.status}</span></td>
+                <td><span class="badge-status status-${o.status.replace(/\s+/g, '-')}}">${o.status}</span></td>
                 <td>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                         ${canManage && o.status !== 'مرتجع' ? (o.status !== 'تم التسليم' ? `<button class="btn-secondary" onclick="advanceOrderStatus('${o.id}')">${nextStepText}</button>` : '<span style="color:var(--success); font-weight:bold; font-size:0.85rem;">منتهي</span>') : ''}
