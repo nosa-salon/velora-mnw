@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velora Cosmetics & Store Manager</title>
+    <!-- Google Fonts & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- ربط ملف التصميم الخارجى (اختياري، أو وضعه داخل الوسم <style>) -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen">
+        <div class="login-card">
+            <h2>Velora System</h2>
+            <p>اختر اسم المستخدم لتسجيل الدخول</p>
+            <div style="text-align: right;">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>اسم المستخدم</label>
+                    <select id="login-user-select" style="width:100%; padding:12px; border-radius:8px; background:var(--bg-main); color:var(--text-main); border:1px solid var(--border-color);">
+                        <option value="admin">الآدمن (الحساب الأساسي)</option>
+                        <option value="dohaa">دعاء</option>
+                        <option value="mona">منى</option>
+                        <option value="poultry">فرع الدواجن</option>
+                        <option value="gardens">فرع الحدايق</option>
+                        <option value="nesma">نسمة (متابعة المبيعات)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label>كلمة المرور</label>
+                    <input type="password" id="login-password" placeholder="أدخل كلمة المرور" style="width:100%; padding:12px; border-radius:8px; background:var(--bg-main); color:var(--text-main); border:1px solid var(--border-color);">
+                </div>
+                <button type="button" id="login-btn-action" class="btn-primary full-btn" style="padding: 12px;">تسجيل الدخول</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" id="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>Velora <span>Manager</span></h2>
+                <button id="close-sidebar" class="close-sidebar-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="user-profile-mini">
+                <div class="user-info-group">
+                    <div class="avatar"><i class="fa-solid fa-user-shield"></i></div>
+                    <div class="info">
+                        <h4 id="current-user-name">الآدمن</h4>
+                        <span id="current-user-role">Admin</span>
+                    </div>
+                </div>
+                <button class="logout-btn" onclick="logout()" title="تسجيل الخروج"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+            <ul class="sidebar-menu" id="sidebar-menu-list"></ul>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="navbar">
+                <div class="nav-left">
+                    <button id="toggle-sidebar" class="icon-btn"><i class="fa-solid fa-bars"></i></button>
+                    <div class="search-box">
+                        <i class="fa-solid fa-search"></i>
+                        <input type="text" id="global-search" placeholder="بحث سريع في النظام...">
+                    </div>
+                </div>
+                <div class="nav-right" style="position: relative;">
+                    <!-- Notification Bell Icon -->
+                    <button id="notif-bell-btn" class="icon-btn" title="الإشعارات والتنبيهات">
+                        <i class="fa-solid fa-bell"></i>
+                        <span id="notif-badge" class="badge-notification" style="display:none;">0</span>
+                    </button>
+                    <!-- Notifications Dropdown Box -->
+                    <div id="notifications-panel" class="notifications-panel">
+                        <div style="padding: 12px 15px; border-bottom: 1px solid var(--border-color); font-weight:bold; display:flex; justify-content:space-between; align-items:center;">
+                            <span>تنبيهات أوردرات المساعدين</span>
+                            <button class="btn-secondary" style="font-size:0.75rem; padding:3px 6px;" onclick="clearNotifications()">حذف الكل</button>
+                        </div>
+                        <div id="notifications-list"></div>
+                    </div>
+
+                    <button id="theme-toggle" class="icon-btn" title="تغيير المظهر"><i class="fa-solid fa-moon"></i></button>
+                    <span>Velora Cosmetics</span>
+                </div>
+            </header>
+
+            <div class="views-container">
+                <!-- 1. DASHBOARD -->
+                <section id="dashboard" class="view">
+                    <div class="view-header">
+                        <h2>لوحة المؤشرات الرئيسية</h2>
+                    </div>
+                    <div class="stats-grid" id="dashboard-stats"></div>
+                </section>
+
+                <!-- 2. ORDERS / POS -->
+                <section id="pos-order" class="view">
+                    <div class="view-header">
+                        <h2>إنشاء فاتورة / أوردر جديد</h2>
+                    </div>
+                    <div class="card">
+                        <div>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>بحث برقم الهاتف أو اسم العميل القديم (لتكرار الأوردر سريعاً)</label>
+                                    <input type="text" id="search-old-customer" placeholder="اكتب للبحث في العملاء السابقين...">
+                                </div>
+                                <div class="form-group">
+                                    <label>اسم العميل *</label>
+                                    <input type="text" id="cust-name" placeholder="اسم العميل">
+                                </div>
+                                <div class="form-group">
+                                    <label>رقم الهاتف *</label>
+                                    <input type="text" id="cust-phone" placeholder="01xxxxxxxxx">
+                                </div>
+                                <div class="form-group">
+                                    <label>المحافظة / الفرع *</label>
+                                    <select id="cust-state">
+                                        <option value="القاهرة">القاهرة</option>
+                                        <option value="الجيزة">الجيزة</option>
+                                        <option value="فرع الدواجن">فرع الدواجن</option>
+                                        <option value="فرع الحدايق">فرع الحدايق</option>
+                                        <option value="سائر المحافظات">سائر المحافظات</option>
+                                    </select>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label>العنوان بالتفصيل *</label>
+                                    <textarea id="cust-address" placeholder="الشارع، رقم الحي"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>بحث واختيار المنتج *</label>
+                                    <input type="text" id="product-filter-search" placeholder="ابحث عن اسم المنتج لتسريع الاختيار...">
+                                    <select id="order-product-select" style="margin-top:5px;"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>الكمية *</label>
+                                    <input type="number" id="order-qty" value="1" min="1">
+                                </div>
+                                <div class="form-group">
+                                    <label>رسوم الشحن (ج.م) *</label>
+                                    <input type="number" id="order-shipping" value="50">
+                                </div>
+                            </div>
+                            <div class="order-summary-box">
+                                <p>الإجمالي النهائي: <span id="calc-grand-total">50</span> ج.م</p>
+                            </div>
+                            <button type="button" id="submit-order-btn" class="btn-primary full-btn"><i class="fa-solid fa-check"></i> تأكيد وإنشاء الفاتورة</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. INVENTORY & STOCK -->
+                <section id="inventory" class="view">
+                    <div class="view-header">
+                        <h2>متابعة الأرصدة والمخازن (لكل فرع)</h2>
+                    </div>
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table>
+                               <thead>
+                                   <tr>
+                                       <th>اسم المنتج / السعر</th>
+                                       <th>رصيد الآدمن الرئيسي</th>
+                                       <th>رصيد فرع الدواجن</th>
+                                       <th>رصيد فرع الحدايق</th>
+                                       <th>التحكم وإضافة رصيد</th>
+                                   </tr>
+                               </thead>
+                               <tbody id="inventory-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. ORDERS TRACKING -->
+                <section id="orders" class="view">
+                    <div class="view-header">
+                        <h2>متابعة المبيعات والأوردرات (جميع الفروع والمساعدين)</h2>
+                    </div>
+                    <div class="filter-bar">
+                        <input type="text" id="order-search" placeholder="بحث برقم الطلب أو اسم العميل...">
+                    </div>
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>رقم الأوردر</th>
+                                        <th>بواسطة فرع / حساب</th>
+                                        <th>العميل والمنتج والكمية</th>
+                                        <th>إجمالي الفاتورة</th>
+                                        <th>الحالة الحالية</th>
+                                        <th>الإجراء / المرحلة / المرتجع</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="orders-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. CUSTOMERS -->
+                <section id="customers" class="view">
+                    <div class="view-header">
+                        <h2>بيانات العملاء المحفوظة</h2>
+                    </div>
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>الاسم</th>
+                                        <th>الهاتف</th>
+                                        <th>العنوان / المحافظة</th>
+                                        <th>عدد الطلبات السابقة</th>
+                                        <th>إجمالي المشتريات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="customers-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. REPORTS / ADMIN -->
+                <section id="reports" class="view">
+                    <div class="view-header">
+                        <h2>تقارير المبيعات والأداء الشاملة</h2>
+                    </div>
+                    <div class="stats-grid" id="reports-stats-grid"></div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- ربط ملف الجافاسكريبت الخارجي -->
+    <script src="script.js"></script>
+</body>
+</html>
