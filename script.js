@@ -14,8 +14,8 @@ const systemUsers = {
     admin: { name: "الآدمن الرئيسي", role: "Admin", pass: "admin123", access: ["dashboard", "pos-order", "inventory", "orders", "customers", "reports"] },
     dohaa: { name: "دعاء", role: "مساعد إدارة", pass: "dohaa123", access: ["pos-order", "inventory", "orders", "customers"] },
     mona: { name: "منى", role: "مساعد إدارة", pass: "mona123", access: ["pos-order", "inventory", "orders", "customers"] },
-    poultry: { name: "فرع الدواجن", role: "مسؤول فرع الدواجن", pass: "poultry123", access: ["pos-order", "inventory"] },
-    gardens: { name: "فرع الحدايق", role: "مسؤول فرع الحدايق", pass: "gardens123", access: ["pos-order", "inventory"] },
+    poultry: { name: "فرع الدواجن", role: "مسؤول فرع الدواجن", pass: "poultry123", access: ["pos-order", "branch-purchase-order", "inventory"] },
+    gardens: { name: "فرع الحدايق", role: "مسؤول فرع الحدايق", pass: "gardens123", access: ["pos-order", "branch-purchase-order", "inventory"] },
     nesma: { name: "نسمة", role: "متابعة المبيعات", pass: "nesma123", access: ["dashboard", "orders"] }
 };
 
@@ -29,15 +29,18 @@ const defaultProducts = [
 
 let products = [];
 let orders = [];
+let purchaseOrders = []; 
+let returnOrders = [];   
 let customers = [];
 let notifications = [];
 
-// جلب وتحديث البيانات لحظياً من سحابة Firebase
 dbRef.on('value', (snapshot) => {
     const data = snapshot.val();
     if (data) {
         products = data.products || defaultProducts;
         orders = data.orders || [];
+        purchaseOrders = data.purchaseOrders || [];
+        returnOrders = data.returnOrders || [];
         customers = data.customers || [];
         notifications = data.notifications || [];
     } else {
@@ -58,6 +61,8 @@ function saveDataToCloud() {
     dbRef.set({
         products: products,
         orders: orders,
+        purchaseOrders: purchaseOrders,
+        returnOrders: returnOrders,
         customers: customers,
         notifications: notifications
     });
@@ -111,9 +116,13 @@ function initApp() {
     renderProductsInventory();
     renderCustomers();
     renderReports();
+    
     if(currentUser.access.includes('pos-order')) {
         initPOSForm();
         initCustomerSearchAutoFill();
+    }
+    if(currentUser.access.includes('branch-purchase-order')) {
+        initBranchPurchaseForm();
     }
 }
 
@@ -124,6 +133,7 @@ function buildSidebarMenu() {
     let menuHTML = '';
     if(allowed.includes('dashboard')) menuHTML += `<li class="active" data-target="dashboard"><i class="fa-solid fa-chart-pie"></i> الرئيسية</li>`;
     if(allowed.includes('pos-order')) menuHTML += `<li data-target="pos-order"><i class="fa-solid fa-file-invoice-dollar"></i> إنشاء فاتورة (بيع)</li>`;
+    if(allowed.includes('branch-purchase-order')) menuHTML += `<li data-target="branch-purchase-order"><i class="fa-solid fa-file-invoice"></i> إنشاء فاتورة (شراء)</li>`;
     if(allowed.includes('inventory')) menuHTML += `<li data-target="inventory"><i class="fa-solid fa-warehouse"></i> رصيد المخزن</li>`;
     if(allowed.includes('orders')) menuHTML += `<li data-target="orders"><i class="fa-solid fa-box-archive"></i> متابعة المبيعات والأوردرات</li>`;
     if(allowed.includes('customers')) menuHTML += `<li data-target="customers"><i class="fa-solid fa-users"></i> بيانات العملاء</li>`;
@@ -131,10 +141,13 @@ function buildSidebarMenu() {
 
     menuList.innerHTML = menuHTML;
 
-    if (currentUser.key === 'nesma') {
-        switchView('dashboard');
-        const firstLi = document.querySelector('.sidebar-menu li');
-        if (firstLi) firstLi.classList.add('active');
+    if (currentUser.key === 'nesma' || currentUser.key === 'poultry' || currentUser.key === 'gardens') {
+        const firstTarget = currentUser.key === 'nesma' ? 'orders' : 'pos-order';
+        switchView(firstTarget);
+        document.querySelectorAll('.sidebar-menu li').forEach(i => {
+            if(i.getAttribute('data-target') === firstTarget) i.classList.add('active');
+            else i.classList.remove('active');
+        });
     }
 
     document.querySelectorAll('.sidebar-menu li').forEach(item => {
@@ -262,7 +275,7 @@ function initPOSForm() {
         
         productSelect.innerHTML = filtered.map(p => {
             const currentStock = (p.stock && typeof p.stock === 'object') ? (p.stock[stockKey] || 0) : p.stock;
-            return `<option value="${p.id}" data-price="${p.price}" data-stock="${currentStock}">${p.name} (السعر: ${p.price} - رصيدك المتاح: ${currentStock})</option>`;
+            return `<option value="${p.id}" data-price="${p.price}" data-stock="${currentStock}">${p.name} - السعر: ${p.price} ج.م (رصيدك المتاح: ${currentStock})</option>`;
         }).join('');
         calcTotal();
     };
@@ -378,6 +391,80 @@ function initPOSForm() {
     updateProductDropdown();
 }
 
+let isPurchaseInitialized = false;
+function initBranchPurchaseForm() {
+    const productSelect = document.getElementById('purchase-product-select');
+    const searchProdInput = document.getElementById('purchase-product-filter-search');
+    const qtyInput = document.getElementById('purchase-qty');
+    const submitBtn = document.getElementById('submit-purchase-order-btn');
+
+    if(!productSelect) return;
+
+    const updateProductDropdown = (filter = "") => {
+        const filtered = products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
+        productSelect.innerHTML = filtered.map(p => {
+            const adminStock = (p.stock && typeof p.stock === 'object') ? (p.stock.admin || 0) : (p.stock || 0);
+            return `<option value="${p.id}" data-price="${p.price}" data-stock="${adminStock}">${p.name} - السعر: ${p.price} ج.م (رصيد الآدمن المتاح: ${adminStock})</option>`;
+        }).join('');
+    };
+
+    if(!isPurchaseInitialized) {
+        if(searchProdInput) {
+            searchProdInput.addEventListener('input', (e) => updateProductDropdown(e.target.value));
+        }
+
+        if(submitBtn) {
+            submitBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const prodId = productSelect.value;
+                const qty = parseInt(qtyInput.value) || 0;
+
+                if(qty <= 0) {
+                    alert('يرجى إدخال كمية صحيحة مطلوبة!');
+                    return;
+                }
+
+                const prod = products.find(p => p.id == prodId);
+                if(!prod) return;
+
+                if(typeof prod.stock !== 'object') {
+                    prod.stock = { admin: prod.stock || 0, poultry: 0, gardens: 0 };
+                }
+
+                if(prod.stock.admin < qty) {
+                    alert(`عذراً، رصيد الآدمن الحالي (${prod.stock.admin}) لا يكفي للكمية المطلوبة (${qty})!`);
+                    return;
+                }
+
+                const purchaseId = "PUR-" + Date.now().toString().slice(-5);
+                const totalPrice = prod.price * qty;
+                
+                purchaseOrders.unshift({
+                    id: purchaseId,
+                    branchKey: currentUser.key,
+                    branchName: currentUser.name,
+                    productId: prod.id,
+                    productName: prod.name,
+                    price: prod.price,
+                    qty: qty,
+                    total: totalPrice,
+                    status: "جديد",
+                    type: "purchase"
+                });
+
+                saveDataToCloud();
+                qtyInput.value = '1';
+                alert(`تم إنشاء فاتورة الشراء بنجاح برقم #${purchaseId} بقيمة إجمالية ${totalPrice} ج.م (${qty} قطعه)، في انتظار تأكيد وتوصيل الآدمن!`);
+            });
+        }
+        isPurchaseInitialized = true;
+    }
+
+    updateProductDropdown();
+}
+
 function initCustomerSearchAutoFill() {
     const searchInput = document.getElementById('search-old-customer');
     if(!searchInput) return;
@@ -447,12 +534,53 @@ function renderProductsInventory() {
                             <button class="btn-secondary" onclick="adminAddStock(${p.id}, 'gardens')">+ الحدايق</button>
                         </div>
                     ` : (isBranch ? `
-                        <button class="btn-secondary" onclick="branchAddStock(${p.id})">+ إضافة رصيد لنفسي</button>
+                        <div style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
+                            <button class="btn-secondary" onclick="branchAddStock(${p.id})">+ إضافة رصيد لنفسي</button>
+                            <button class="btn-danger" style="background:var(--danger); font-size:0.8rem; padding:5px 8px;" onclick="branchReturnStockModal(${p.id})"><i class="fa-solid fa-rotate-left"></i> استرجاع للمصنع</button>
+                        </div>
                     ` : '<span style="color:var(--text-muted); font-size:0.85rem;">للاطلاع فقط</span>')}
                 </td>
             </tr>
         `;
     }).join('');
+}
+
+function branchReturnStockModal(id) {
+    const p = products.find(item => item.id === id);
+    if(!p) return;
+
+    const branchStockKey = currentUser.key === 'poultry' ? 'poultry' : 'gardens';
+    const currentStock = p.stock[branchStockKey] || 0;
+
+    const qtyStr = prompt(`المنتج: (${p.name})\nرصيدك الحالي المتاح: ${currentStock}\nأدخل الكمية المراد عمل استرجاع لها للمصنع:`, "1");
+    if(qtyStr !== null && !isNaN(qtyStr)) {
+        const qty = parseInt(qtyStr);
+        if(qty <= 0) {
+            alert("يرجى إدخال كمية صحيحة أكبر من الصفر!");
+            return;
+        }
+
+        if(qty > currentStock) {
+            alert(`عذراً، الكمية المطلوبة (${qty}) أكبر من رصيدك الحالي المتاح (${currentStock})!`);
+            return;
+        }
+
+        const returnId = "RET-" + Date.now().toString().slice(-5);
+        
+        returnOrders.unshift({
+            id: returnId,
+            branchKey: currentUser.key,
+            branchName: currentUser.name,
+            productId: p.id,
+            productName: p.name,
+            qty: qty,
+            status: "جديد", 
+            type: "return"
+        });
+
+        saveDataToCloud();
+        alert(`تم إرسال طلب الاسترجاع للمصنع بنجاح برقم #${returnId}، ولن يتم الخصم من رصيدك إلا بعد موافقة وتأكيد الآدمن عليه!`);
+    }
 }
 
 function adminAddNewProduct() {
@@ -547,6 +675,98 @@ function advanceOrderStatus(id) {
     saveDataToCloud();
 }
 
+function advancePurchaseStatus(id) {
+    if (currentUser.key !== 'admin') {
+        alert('تأكيد وتسليم فواتير الشراء مخصص للآدمن الرئيسي فقط.');
+        return;
+    }
+
+    const po = purchaseOrders.find(item => item.id === id);
+    if (!po) return;
+
+    if (po.status === 'جديد') {
+        po.status = 'جارٍ التجهيز';
+    } else if (po.status === 'جارٍ التجهيز') {
+        po.status = 'تم الشحن';
+    } else if (po.status === 'تم الشحن') {
+        po.status = 'تم التسليم';
+        
+        const p = products.find(item => item.id == po.productId);
+        if (p) {
+            if (typeof p.stock !== 'object') p.stock = { admin: 0, poultry: 0, gardens: 0 };
+            if (p.stock.admin >= po.qty) {
+                p.stock.admin -= po.qty;
+                p.stock[po.branchKey] = (p.stock[po.branchKey] || 0) + po.qty;
+            } else {
+                alert('تحذير: رصيد الآدمن الحالي لا يكفي لخصم الكمية المطلوبة!');
+                return;
+            }
+        }
+    } else {
+        alert('فاتورة الشراء مكتملة بالفعل.');
+        return;
+    }
+
+    saveDataToCloud();
+}
+
+function approveReturnOrder(id) {
+    if (currentUser.key !== 'admin') {
+        alert('موافقة واعتماد فواتير المرتجعات مخصص للآدمن الرئيسي فقط.');
+        return;
+    }
+
+    const ro = returnOrders.find(item => item.id === id);
+    if (!ro) return;
+
+    if (ro.status === 'تم الاستلام والتأكيد') {
+        alert('تم اعتماد هذا المرتجع مسبقاً.');
+        return;
+    }
+
+    const p = products.find(item => item.id == ro.productId);
+    if (p) {
+        if (typeof p.stock !== 'object') p.stock = { admin: 0, poultry: 0, gardens: 0 };
+        
+        const branchKey = ro.branchKey; 
+        if ((p.stock[branchKey] || 0) >= ro.qty) {
+            p.stock[branchKey] -= ro.qty;      
+            p.stock.admin += ro.qty;           
+            ro.status = 'تم الاستلام والتأكيد';
+            saveDataToCloud();
+            alert(`تم اعتماد المرتجع بنجاح، وتم خصم (${ro.qty}) من رصيد (${ro.branchName}) وإضافتها لمخزن الآدمن سحابياً!`);
+        } else {
+            alert(`عذراً، رصيد الفرع الحالي (${p.stock[branchKey] || 0}) لم يعد يكفي لإتمام الخصم المطلوبة (${ro.qty})!`);
+        }
+    }
+}
+
+function deletePurchaseOrder(id) {
+    if (currentUser.key !== 'admin') {
+        alert('حذف فواتير الشراء مخصص للآدمن الرئيسي فقط.');
+        return;
+    }
+
+    if (confirm(`هل أنت متأكد من حذف فاتورة الشراء #${id} نهائياً؟`)) {
+        purchaseOrders = purchaseOrders.filter(po => po.id !== id);
+        saveDataToCloud();
+        alert('تم حذف الفاتورة بنجاح.');
+    }
+}
+
+function deleteReturnOrder(id) {
+    if (currentUser.key !== 'admin') {
+        alert('حذف طلبات المرتجعات مخصص للآدمن الرئيسي فقط.');
+        return;
+    }
+
+    if (confirm(`هل أنت متأكد من حذف طلب المرتجع #${id} نهائياً؟`)) {
+        returnOrders = returnOrders.filter(ro => ro.id !== id);
+        saveDataToCloud();
+        alert('تم حذف طلب المرتجع بنجاح.');
+    }
+}
+
 function makeReturnOrder(id) {
     if (currentUser.key !== 'admin') {
         alert('عذراً، خاصية عمل المرتجع متاح للحساب الرئيسي (الآدمن) فقط.');
@@ -593,14 +813,12 @@ function renderOrders() {
     if(!tbody) return;
 
     let filteredOrders = orders;
-    if (currentUser.key === 'nesma') {
-        filteredOrders = orders.filter(o => o.createdBy !== 'الآدمن الرئيسي' && o.createdBy !== 'الآدمن');
-    }
 
     const canManage = (currentUser.key !== 'nesma');
     const isAdmin = (currentUser.key === 'admin');
+    const showPurchasesAndReturns = (currentUser.key === 'admin' || currentUser.key === 'nesma');
 
-    tbody.innerHTML = filteredOrders.map(o => {
+    let html = filteredOrders.map(o => {
         let nextStepText = "تقدم";
         if (o.status === 'جديد') nextStepText = 'بدء التجهيز';
         else if (o.status === 'جارٍ التجهيز') nextStepText = 'تم التجهيز';
@@ -624,7 +842,63 @@ function renderOrders() {
                 </td>
             </tr>
         `;
-    }).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد طلبات مسجلة حالياً</td></tr>';
+    }).join('');
+
+    let purchaseHtml = "";
+    if (showPurchasesAndReturns) {
+        purchaseHtml = purchaseOrders.map(po => {
+            let nextStepText = "تقدم";
+            if (po.status === 'جديد') nextStepText = 'بدء التجهيز';
+            else if (po.status === 'جارٍ التجهيز') nextStepText = 'شحن الطلب';
+            else if (po.status === 'تم الشحن') nextStepText = 'تأكيد التسليم (إضافة الرصيد)';
+
+            const itemPrice = po.price || 0;
+            const itemTotal = po.total || (itemPrice * po.qty);
+
+            return `
+                <tr style="background: rgba(var(--primary-rgb), 0.03);">
+                    <td><strong>#${po.id}</strong> <span style="font-size:0.75rem; background:var(--primary); color:#fff; padding:2px 5px; border-radius:4px;">شراء فرع</span></td>
+                    <td><span style="color:var(--primary); font-weight:600;"><i class="fa-solid fa-warehouse"></i> ${po.branchName}</span></td>
+                    <td>طلب توريد مخزون<br><span style="color:var(--text-muted); font-size:0.85rem;">المنتج: <strong>${po.productName}</strong> | السعر: ${itemPrice} ج.م | (العدد: ${po.qty} قطعه)</span></td>
+                    <td><strong style="color:var(--success);">${itemTotal} ج.م</strong></td>
+                    <td><span class="badge-status status-${po.status.replace(/\s+/g, '-')}">${po.status}</span></td>
+                    <td>
+                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                            ${isAdmin && po.status !== 'تم التسليم' ? `<button class="btn-primary" onclick="advancePurchaseStatus('${po.id}')">${nextStepText}</button>` : ''}
+                            ${po.status === 'تم التسليم' ? '<span style="color:var(--success); font-weight:bold; font-size:0.85rem;">تم إضافة الرصيد</span>' : ''}
+                            ${isAdmin ? `<button class="btn-danger" style="background:#444;" onclick="deletePurchaseOrder('${po.id}')"><i class="fa-solid fa-trash"></i> حذف</button>` : ''}
+                            ${!isAdmin ? '<span style="color:var(--text-muted); font-size:0.85rem;">في انتظار اعتماد الآدمن</span>' : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    let returnHtml = "";
+    if (showPurchasesAndReturns) {
+        returnHtml = returnOrders.map(ro => {
+            return `
+                <tr style="background: rgba(255, 0, 0, 0.03);">
+                    <td><strong>#${ro.id}</strong> <span style="font-size:0.75rem; background:var(--danger); color:#fff; padding:2px 5px; border-radius:4px;">استرجاع للمصنع</span></td>
+                    <td><span style="color:var(--danger); font-weight:600;"><i class="fa-solid fa-rotate-left"></i> ${ro.branchName}</span></td>
+                    <td>طلب إرجاع رصيد للمصنع (الآدمن)<br><span style="color:var(--text-muted); font-size:0.85rem;">المنتج: <strong>${ro.productName}</strong> (العدد: ${ro.qty})</span></td>
+                    <td><strong style="color:var(--text);">استرجاع مخزني</strong></td>
+                    <td><span class="badge-status status-${ro.status.replace(/\s+/g, '-')}">${ro.status}</span></td>
+                    <td>
+                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                            ${isAdmin && ro.status !== 'تم الاستلام والتأكيد' ? `<button class="btn-primary" onclick="approveReturnOrder('${ro.id}')">تأكيد الاسترجاع وخصم الرصيد</button>` : ''}
+                            ${ro.status === 'تم الاستلام والتأكيد' ? '<span style="color:var(--success); font-weight:bold; font-size:0.85rem;">تم الاعتماد والخصم</span>' : ''}
+                            ${isAdmin ? `<button class="btn-danger" style="background:#444;" onclick="deleteReturnOrder('${ro.id}')"><i class="fa-solid fa-trash"></i> حذف</button>` : ''}
+                            ${!isAdmin ? '<span style="color:var(--text-muted); font-size:0.85rem;">في انتظار تأكيد الآدمن</span>' : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    tbody.innerHTML = returnHtml + purchaseHtml + html || '<tr><td colspan="6" style="text-align:center;">لا توجد طلبات أو فواتير مسجلة حالياً</td></tr>';
 }
 
 function renderCustomers() {
