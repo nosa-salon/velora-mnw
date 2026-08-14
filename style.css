@@ -565,3 +565,54 @@ tr:hover {
         display: block;
     }
 }
+
+/* Velora Brand Identity - burgundy + metallic gold + soft pink */
+:root {
+  --bg-main: #fbf7f8;
+  --bg-card: #ffffff;
+  --text-main: #32151f;
+  --text-muted: #7d6670;
+  --primary: #8a2948;
+  --primary-hover: #6f1735;
+  --dark: #4b1026;
+  --light-gray: #f3e7eb;
+  --border-color: #ead9df;
+  --sidebar-bg: #4b1026;
+  --sidebar-text: #ffffff;
+}
+.dark-mode {
+  --bg-main: #1d1518; --bg-card: #2a2023; --text-main: #f7edf1;
+  --text-muted: #c9b5bd; --border-color: #4d3b42; --light-gray: #382c31;
+  --sidebar-bg: #26151c; --sidebar-text: #fff;
+}
+.btn-primary, button.btn-primary { background: #8a2948 !important; border-color: #8a2948 !important; }
+.btn-primary:hover, button.btn-primary:hover { background: #6f1735 !important; border-color: #6f1735 !important; }
+.invoice-print-area { color:#32151f; }
+.invoice-brand { border-bottom-color:#b18a3c !important; }
+.invoice-table th { background:#f8eef2 !important; color:#6f1735 !important; }
+.invoice-grand-total { border-top-color:#b18a3c !important; color:#6f1735 !important; }
+
+/* Electronic invoice preview - compact, fully visible and print friendly */
+.electronic-invoice-preview{background:#f5eef1;border:1px solid var(--border-color);border-radius:14px;padding:18px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;min-height:420px;}
+.electronic-invoice-preview .invoice-print-area{width:740px;max-width:100%;background:#fff;padding:18px;border:1px solid #ead9df;border-radius:10px;box-shadow:0 8px 24px rgba(75,16,38,.08);color:#32151f;font-family:Arial,Tahoma,sans-serif;}
+.electronic-invoice-preview .invoice-logo{width:46px;height:30px;object-fit:contain;}
+.electronic-invoice-preview .invoice-brand{display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:2px solid #b18a3c;padding-bottom:10px;margin-bottom:11px;}
+.electronic-invoice-preview .invoice-brand-main{display:flex;align-items:center;gap:9px;}
+.electronic-invoice-preview .invoice-brand h1{margin:0 0 2px;font-size:18px;color:#6f1735;}
+.electronic-invoice-preview .invoice-brand p{margin:0;font-size:10px;color:#8b6874;}
+.electronic-invoice-preview .invoice-number{font-size:10px;text-align:left;}
+.electronic-invoice-preview .invoice-number span{font-size:15px;font-weight:700;color:#9a762e;}
+.electronic-invoice-preview .invoice-meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 10px;margin-bottom:11px;font-size:10.5px;line-height:1.45;}
+.electronic-invoice-preview .invoice-meta-full{grid-column:1/-1;}
+.electronic-invoice-preview .invoice-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px;}
+.electronic-invoice-preview .invoice-table th,.electronic-invoice-preview .invoice-table td{border:1px solid #e2d5da;padding:6px 5px;text-align:right;vertical-align:middle;}
+.electronic-invoice-preview .invoice-table th{background:#f8eef2;color:#6f1735;font-weight:700;}
+.electronic-invoice-preview .invoice-table th:first-child,.electronic-invoice-preview .invoice-table td:first-child{width:30px;text-align:center;}
+.electronic-invoice-preview .invoice-table th:nth-child(3),.electronic-invoice-preview .invoice-table td:nth-child(3){width:58px;text-align:center;}
+.electronic-invoice-preview .invoice-table th:nth-child(4),.electronic-invoice-preview .invoice-table td:nth-child(4),.electronic-invoice-preview .invoice-table th:nth-child(5),.electronic-invoice-preview .invoice-table td:nth-child(5){width:88px;}
+.electronic-invoice-preview .invoice-totals{width:245px;margin:11px 0 0 auto;font-size:10px;}
+.electronic-invoice-preview .invoice-totals>div{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;}
+.electronic-invoice-preview .invoice-grand-total{font-size:13px;font-weight:700;border-top:2px solid #b18a3c!important;color:#6f1735;padding-top:7px!important;}
+.electronic-invoice-preview .invoice-footer{text-align:center;border-top:1px solid #ddd;margin-top:11px;padding-top:7px;color:#8b6874;font-size:9px;}
+.electronic-invoice-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:16px;}
+@media(max-width:760px){.electronic-invoice-preview{padding:8px;}.electronic-invoice-preview .invoice-print-area{min-width:640px;transform-origin:top center;}.electronic-invoice-actions button{flex:1 1 180px;}}
