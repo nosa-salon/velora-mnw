@@ -7,6 +7,8 @@
     <!-- مكتبات فايربيس السحابية للربط والتزامن اللحظي بين الأجهزة -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- ملف التصميم -->
     <link rel="stylesheet" href="style.css">
     <!-- FontAwesome للأيقونات -->
@@ -130,19 +132,35 @@
                         <hr style="margin: 20px 0; border:0; border-top:1px solid var(--border-color);">
                         <div class="form-row">
                             <div class="form-group">
-                                <label>تصفية / بحث عن منتج:</label>
-                                <input type="text" id="product-filter-search" class="form-control" placeholder="اكتب اسم المنتج للتصفية...">
+                                <label>نوع التسليم / مصدر المخزن:</label>
+                                <select id="order-delivery-type" class="form-control">
+                                    <option value="">-- اختر نوع التسليم أولاً --</option>
+                                    <option value="provinces">محافظات</option>
+                                    <option value="cairo">شحن داخل القاهرة</option>
+                                    <option value="gardens">استلام من فرع الحدايق</option>
+                                    <option value="poultry">استلام من فرع الدواجن</option>
+                                </select>
                             </div>
                             <div class="form-group">
-                                <label>اختر المنتج المطلوب:</label>
-                                <select id="order-product-select" class="form-control"></select>
+                                <label>تصفية / بحث عن منتج:</label>
+                                <input type="text" id="product-filter-search" class="form-control" placeholder="اكتب اسم المنتج للتصفية...">
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
+                                <label>اختر المنتج المطلوب:</label>
+                                <select id="order-product-select" class="form-control"></select>
+                            </div>
+                            <div class="form-group">
                                 <label>الكمية:</label>
                                 <input type="number" id="order-qty" class="form-control" value="1" min="1">
                             </div>
+                        </div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                            <button id="add-order-item-btn" type="button" class="btn-secondary">+ إضافة المنتج للفاتورة</button>
+                        </div>
+                        <div id="sale-items-preview" class="table-responsive" style="margin-top:15px;"></div>
+                        <div class="form-row">
                             <div class="form-group">
                                 <label>رسوم الشحن (تضاف يدوياً):</label>
                                 <input type="number" id="order-shipping" class="form-control" value="0" min="0">
@@ -156,6 +174,45 @@
                 </section>
 
                 <!-- 2 الإضافية: إنشاء فاتورة (شراء) للفرع من الآدمن -->
+
+                <!-- إضافة جديدة فقط: إدارة وطباعة الفاتورة الإلكترونية للآدمن الرئيسي -->
+                <section id="electronic-invoice" class="view">
+                    <div class="view-header">
+                        <h2><i class="fa-solid fa-file-invoice"></i> طباعة الفاتورة الإلكترونية</h2>
+                    </div>
+                    <div class="pos-card electronic-invoice-card">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>اختر الفاتورة:</label>
+                                <select id="electronic-invoice-select" class="form-control">
+                                    <option value="">-- اختر رقم الفاتورة --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>بحث برقم الفاتورة أو اسم العميل أو الهاتف:</label>
+                                <input type="text" id="electronic-invoice-search" class="form-control"
+                                       placeholder="ابحث ثم اختر الفاتورة...">
+                            </div>
+                        </div>
+                        <div id="electronic-invoice-preview" class="electronic-invoice-preview">
+                            <div class="invoice-empty-state">
+                                <i class="fa-solid fa-receipt"></i>
+                                <p>اختر فاتورة لعرضها وتجهيزها للطباعة أو الإرسال عبر واتساب.</p>
+                            </div>
+                        </div>
+                        <div class="electronic-invoice-actions">
+                            <button type="button" id="print-electronic-invoice-btn" class="btn-primary">
+                                <i class="fa-solid fa-print"></i> طباعة / حفظ PDF
+                            </button>
+                            <button type="button" id="download-electronic-invoice-png-btn" class="btn-secondary"><i class="fa-solid fa-image"></i> تنزيل كصورة PNG</button>
+                            <button type="button" id="download-electronic-invoice-pdf-btn" class="btn-secondary"><i class="fa-solid fa-file-pdf"></i> تنزيل PDF</button>
+                            <button type="button" id="whatsapp-electronic-invoice-btn" class="btn-whatsapp">
+                                <i class="fa-brands fa-whatsapp"></i> إرسال عبر واتساب
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
                 <section id="branch-purchase-order" class="view">
                     <h2>إنشاء فاتورة شراء جديدة (طلب بضاعة من الآدمن)</h2>
                     <div class="pos-card">
@@ -201,7 +258,7 @@
                     <h2>متابعة الأوردرات وحالات الشحن</h2>
                     <div class="table-responsive">
                         <table class="data-table">
-                            <thead>
+                            <thead id="orders-table-head">
                                 <tr>
                                     <th>رقم الطلب</th>
                                     <th>الفرع / المُدخل</th>
@@ -218,7 +275,35 @@
                     </div>
                 </section>
 
-                <!-- 5. بيانات العملاء -->
+                <!-- 5. استعلام برقم الهاتف -->
+                <section id="invoice-query" class="view">
+                    <h2>استعلام عن الفاتورة برقم الهاتف</h2>
+                    <div class="pos-card">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>رقم هاتف الحجز:</label>
+                                <input type="text" id="invoice-query-phone" class="form-control" placeholder="01xxxxxxxxx">
+                            </div>
+                            <div class="form-group" style="display:flex;align-items:end;">
+                                <button id="invoice-query-btn" class="btn-primary" style="width:100%;">بحث عن الفواتير</button>
+                            </div>
+                        </div>
+                        <div id="invoice-query-results" class="table-responsive" style="margin-top:15px;"></div>
+                    </div>
+                </section>
+
+                <!-- 6. طلبات تحتاج للتصنيع -->
+                <section id="manufacturing" class="view">
+                    <h2>طلبات تحتاج للتصنيع</h2>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr><th>الفاتورة</th><th>العميل</th><th>الفرع / جهة الطلب</th><th>المنتج</th><th>المطلوب</th><th>الموفر</th><th>المتبقي</th><th>المبلغ</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+                            <tbody id="manufacturing-table-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 7. بيانات العملاء -->
                 <section id="customers" class="view">
                     <h2>سجل وقاعدة بيانات العملاء</h2>
                     <div class="table-responsive">
