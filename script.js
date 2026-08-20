@@ -428,9 +428,33 @@ function initPOSForm() {
             const shipping = parseFloat(shippingInput?.value) || 0;
             const itemsTotal = saleItems.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
             const total = itemsTotal + shipping;
-            const newId = (1050 + orders.length + 1).toString();
             const state = document.getElementById('cust-state').value;
             const items = saleItems.map(x => ({...x, qty: Number(x.qty), price: Number(x.price)}));
+
+            // منع الضغط المتكرر أو تسجيل نفس الفاتورة مرتين من جهازين مختلفين.
+            // البصمة تعتمد على بيانات الفاتورة نفسها، مع الاحتفاظ بكل الفواتير والعملاء القديمة.
+            const orderFingerprint = [
+                String(phone).replace(/\D/g, ''),
+                String(meta.type || ''),
+                String(total),
+                items.map(i => `${i.productId}:${Number(i.qty)}:${Number(i.price)}`).sort().join('|')
+            ].join('||');
+            const duplicateOrder = orders.find(o => {
+                if (!o || ['مرتجع', 'مرتجع جزئي', 'ملغي'].includes(String(o.status || ''))) return false;
+                if (o.orderFingerprint) return o.orderFingerprint === orderFingerprint;
+                const oldItems = getItemList(o).map(i => `${i.productId}:${Number(i.qty)}:${Number(i.price)}`).sort().join('|');
+                return String(o.phone || '').replace(/\D/g, '') === String(phone).replace(/\D/g, '')
+                    && String(o.deliveryType || '') === String(meta.type || '')
+                    && Number(o.total || 0) === Number(total)
+                    && oldItems === items.map(i => `${i.productId}:${Number(i.qty)}:${Number(i.price)}`).sort().join('|');
+            });
+            if (duplicateOrder) {
+                alert(`الفاتورة موجودة بالفعل برقم #${duplicateOrder.id} وتم تسجيلها بواسطة ${duplicateOrder.createdBy || 'أحد المستخدمين'}.\nلن يتم إنشاء فاتورة مكررة.`);
+                return;
+            }
+
+            // رقم فريد لا يعتمد على orders.length حتى لا يتكرر عند عمل فاتورتين في نفس الوقت.
+            const newId = `V-${Date.now()}-${currentUser.key}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
 
             // تسجيل العميل كما كان النظام الأصلي، من غير حذف البيانات القديمة.
             const existingCust = customers.find(c => c.phone === phone);
@@ -442,6 +466,7 @@ function initPOSForm() {
                 items, productId: items[0].productId, productName: items[0].productName, price: items[0].price, qty: items[0].qty,
                 shipping, total, deliveryType: meta.type, deliveryLabel: meta.label, stockKeyUsed: meta.stockKey, targetBranchKey: meta.branchKey,
                 status: meta.status, createdBy: currentUser.name, createdByKey: currentUser.key, createdAt: Date.now(),
+                orderFingerprint,
                 stockDeducted: false, priceHiddenForNonAdmin: true
             };
             orders.unshift(order);
@@ -1388,11 +1413,13 @@ function renderOrders() {
         }
         const confirmBadge=o.stockDeducted?'تم تأكيد الخصم':o.status;
         const canDelete = canDeleteOrder(o);
+        const creatorName = o.createdBy || (o.createdByKey && systemUsers[o.createdByKey]?.name) || 'غير محدد';
+        const sourceLabel = o.deliveryLabel ? `${o.deliveryLabel} — بواسطة: ${creatorName}` : `بواسطة: ${creatorName}`;
         const canReturn = isAdmin && !['مرتجع'].includes(o.status);
         const actions=`<div class="order-actions-cell">${button}${canReturn?`<button class="btn-danger" onclick="makeReturnOrder('${o.id}')">↩ مرتجع</button>`:''}${canDelete?`<button class="btn-danger" style="background:#444;" onclick="deleteOrder('${o.id}')">حذف</button>`:''}</div>`;
         return `<tr>
             <td><strong>#${o.id}</strong></td>
-            <td><span style="color:var(--primary);font-weight:600;"><i class="fa-solid fa-store"></i> ${o.deliveryLabel||o.createdBy||'—'}</span></td>
+            <td><span style="color:var(--primary);font-weight:600;"><i class="fa-solid fa-user-tie"></i> ${sourceLabel}</span></td>
             <td><strong>${o.customerName||'—'}</strong><br><span style="color:var(--text-muted);font-size:.8rem;">${o.phone||''}</span></td>
             <td class="order-product-cell">${productText}</td>
             <td class="order-qty-cell">${qtyText}</td>
