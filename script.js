@@ -11,7 +11,7 @@ if (!firebase.apps.length) {
 const dbRef = firebase.database().ref('velora_system_data');
 
 const systemUsers = {
-    admin: { name: "الآدمن الرئيسي", role: "Admin", pass: "admin123", access: ["dashboard", "pos-order", "inventory", "orders", "customers", "reports", "invoice-query", "manufacturing"] },
+    admin: { name: "الآدمن الرئيسي", role: "Admin", pass: "admin123", access: ["dashboard", "pos-order", "inventory", "orders", "customers", "reports", "invoice-query", "manufacturing", "electronic-invoice"] },
     dohaa: { name: "دعاء", role: "مساعد إدارة", pass: "dohaa123", access: ["pos-order", "inventory", "orders", "invoice-query", "electronic-invoice"] },
     mona: { name: "منى", role: "مساعد إدارة", pass: "mona123", access: ["pos-order", "inventory", "orders", "invoice-query", "electronic-invoice"] },
     poultry: { name: "فرع الدواجن", role: "مسؤول فرع الدواجن", pass: "poultry123", access: ["pos-order", "branch-purchase-order", "inventory", "orders", "invoice-query"] },
@@ -35,6 +35,7 @@ let customers = [];
 let notifications = [];
 let manufacturingRequests = [];
 let stockAdjustments = [];
+let electronicInvoiceWhatsAppNumber = '01107249120';
 
 dbRef.on('value', (snapshot) => {
     const data = snapshot.val();
@@ -47,6 +48,7 @@ dbRef.on('value', (snapshot) => {
         notifications = data.notifications || [];
         manufacturingRequests = data.manufacturingRequests || [];
         stockAdjustments = data.stockAdjustments || [];
+        electronicInvoiceWhatsAppNumber = data.electronicInvoiceWhatsAppNumber || '01107249120';
     } else {
         products = defaultProducts;
         saveDataToCloud();
@@ -54,6 +56,7 @@ dbRef.on('value', (snapshot) => {
     if(currentUser) {
         renderDashboard();
         renderOrders();
+        renderDeliveredOrders();
         renderProductsInventory();
         renderCustomers();
         renderReports();
@@ -72,7 +75,8 @@ function saveDataToCloud() {
         customers: customers,
         notifications: notifications,
         manufacturingRequests: manufacturingRequests,
-        stockAdjustments: stockAdjustments
+        stockAdjustments: stockAdjustments,
+        electronicInvoiceWhatsAppNumber: electronicInvoiceWhatsAppNumber
     });
 }
 
@@ -121,6 +125,7 @@ function initApp() {
     initNotificationsUI();
     renderDashboard();
     renderOrders();
+    renderDeliveredOrders();
     renderProductsInventory();
     renderCustomers();
     renderReports();
@@ -146,7 +151,10 @@ function buildSidebarMenu() {
     if(allowed.includes('pos-order')) menuHTML += `<li data-target="pos-order"><i class="fa-solid fa-file-invoice-dollar"></i> إنشاء فاتورة (بيع)</li>`;
     if(allowed.includes('branch-purchase-order')) menuHTML += `<li data-target="branch-purchase-order"><i class="fa-solid fa-file-invoice"></i> إنشاء فاتورة (شراء)</li>`;
     if(allowed.includes('inventory')) menuHTML += `<li data-target="inventory"><i class="fa-solid fa-warehouse"></i> رصيد المخزن</li>`;
-    if(allowed.includes('orders')) menuHTML += `<li data-target="orders"><i class="fa-solid fa-box-archive"></i> متابعة المبيعات والأوردرات</li>`;
+    if(allowed.includes('orders')) {
+        menuHTML += `<li data-target="orders"><i class="fa-solid fa-box-archive"></i> متابعة الأوردرات وحالات الشحن</li>`;
+        if(currentUser.key === 'admin') menuHTML += `<li data-target="delivered-orders"><i class="fa-solid fa-box-circle-check"></i> الأوردرات المسلمة</li>`;
+    }
     if(allowed.includes('invoice-query')) menuHTML += `<li data-target="invoice-query"><i class="fa-solid fa-magnifying-glass"></i> استعلام برقم الهاتف</li>`;
     if(allowed.includes('electronic-invoice')) menuHTML += `<li data-target="electronic-invoice"><i class="fa-solid fa-file-invoice"></i> طباعة الفاتورة الإلكترونية</li>`;
     if(allowed.includes('manufacturing')) menuHTML += `<li data-target="manufacturing"><i class="fa-solid fa-industry"></i> طلبات تحتاج للتصنيع</li>`;
@@ -1377,7 +1385,7 @@ function renderOrders() {
     const thead=document.getElementById('orders-table-head');
     if(!tbody) return;
 
-    const visible=orders.filter(canSeeOrder);
+    const visible=orders.filter(o => canSeeOrder(o) && !(currentUser.key === 'admin' && isDeliveredOrder(o)));
     const canManage=['admin','nesma','dohaa','mona','poultry','gardens'].includes(currentUser.key);
     const isAdmin=currentUser.key==='admin';
     // المبالغ تظهر فقط لصاحبة المشروع (نسمة) والآدمن الرئيسي.
@@ -1433,7 +1441,7 @@ function renderOrders() {
     const showPurchasesAndReturns=(currentUser.key==='admin'||currentUser.key==='nesma');
     let purchaseHtml='';
     if(showPurchasesAndReturns){
-        purchaseHtml=purchaseOrders.map(po=>{
+        purchaseHtml=purchaseOrders.filter(po => po.status !== 'تم التسليم').map(po=>{
             let next=po.status==='جديد'?'بدء التجهيز':po.status==='جارٍ التجهيز'?'شحن الطلب':po.status==='تم الشحن'?'تأكيد التسليم (إضافة الرصيد)':'تمت الإضافة';
             const total=po.total||(Number(po.price||0)*Number(po.qty||0));
             return `<tr class="purchase-order-row">
@@ -1469,6 +1477,52 @@ function renderOrders() {
 
     const colCount=showMoney?9:8;
     tbody.innerHTML=(returnHtml+purchaseHtml+html)||`<tr><td colspan="${colCount}" style="text-align:center;">لا توجد طلبات أو فواتير مسجلة حالياً</td></tr>`;
+}
+
+function renderDeliveredOrders() {
+    if (currentUser.key !== 'admin') return;
+    const tbody = document.getElementById('delivered-orders-table-body');
+    const thead = document.getElementById('delivered-orders-table-head');
+    if (!tbody) return;
+    const showMoney = true;
+    if (thead) {
+        thead.innerHTML = `<tr>
+            <th>رقم الطلب</th><th>الفرع / المُدخل</th><th>اسم العميل</th><th>المنتج</th>
+            <th>العدد المطلوب</th><th>العنوان</th><th>الإجمالي</th><th>الحالة</th>
+        </tr>`;
+    }
+    const delivered = orders.filter(o => canSeeOrder(o) && isDeliveredOrder(o));
+    const orderRows = delivered.map(o => {
+        const items = getItemList(o);
+        const productText = items.length ? items.map(i => `${i.productName}`).join('<br>') : '—';
+        const qtyText = items.length ? items.map(i => `${i.qty}`).join('<br>') : '—';
+        const creatorName = o.createdBy || (o.createdByKey && systemUsers[o.createdByKey]?.name) || 'غير محدد';
+        const sourceLabel = o.deliveryLabel ? `${o.deliveryLabel} — بواسطة: ${creatorName}` : `بواسطة: ${creatorName}`;
+        return `<tr>
+            <td><strong>#${o.id}</strong></td>
+            <td><span style="color:var(--primary);font-weight:600;"><i class="fa-solid fa-user-tie"></i> ${sourceLabel}</span></td>
+            <td><strong>${o.customerName||'—'}</strong><br><span style="color:var(--text-muted);font-size:.8rem;">${o.phone||''}</span></td>
+            <td class="order-product-cell">${productText}</td>
+            <td class="order-qty-cell">${qtyText}</td>
+            <td class="order-address-cell">${o.address||'—'}</td>
+            <td class="order-money-cell"><strong style="color:var(--success);font-size:1rem;">${Number(o.total||0).toFixed(2)} ج.م</strong></td>
+            <td><span class="badge-status">${o.status}</span></td>
+        </tr>`;
+    }).join('');
+
+    const deliveredPurchases = purchaseOrders.filter(po => po.status === 'تم التسليم');
+    const purchaseRows = deliveredPurchases.map(po => {
+        const total = po.total || (Number(po.price||0) * Number(po.qty||0));
+        return `<tr class="purchase-order-row">
+            <td><strong>#${po.id}</strong> <span class="order-type-badge">طلب توريد</span></td>
+            <td>${po.branchName||po.branchKey||'—'}</td><td>—</td>
+            <td>${po.productName||'طلب توريد مخزون'}</td><td>${po.qty||0}</td>
+            <td>طلب توريد مخزون</td>
+            <td><strong style="color:var(--success);">${Number(total||0).toFixed(2)} ج.م</strong></td>
+            <td><span class="badge-status">${po.status}</span></td>
+        </tr>`;
+    }).join('');
+    tbody.innerHTML = (orderRows + purchaseRows) || `<tr><td colspan="8" style="text-align:center;">لا توجد أوردرات مسلمة حتى الآن</td></tr>`;
 }
 
 function renderManufacturingRequests() {
@@ -1583,7 +1637,24 @@ function initElectronicInvoice(){
  const pngBtn=document.getElementById('download-electronic-invoice-png-btn');
  const pdfBtn=document.getElementById('download-electronic-invoice-pdf-btn');
  const waBtn=document.getElementById('whatsapp-electronic-invoice-btn');
+ const waNumberInput=document.getElementById('electronic-invoice-whatsapp-number');
+ const waSaveBtn=document.getElementById('save-electronic-invoice-whatsapp-number');
+ const waSettings=document.getElementById('electronic-invoice-whatsapp-settings');
  if(!select||!search)return;
+ if(waSettings) waSettings.style.display = currentUser?.key === 'admin' ? 'block' : 'none';
+ if(waNumberInput){ waNumberInput.value = electronicInvoiceWhatsAppNumber || '01107249120'; }
+ if(waSaveBtn && currentUser?.key === 'admin'){
+   waSaveBtn.addEventListener('click', async ()=>{
+     const raw=String(waNumberInput.value||'').trim();
+     const digits=raw.replace(/\D/g,'');
+     if(!digits){ alert('من فضلك اكتب رقم واتساب صحيح.'); return; }
+     if(digits.length < 10 || digits.length > 15){ alert('رقم واتساب غير صحيح. اكتب الرقم بالمفتاح الدولي أو بصيغة 01xxxxxxxxx.'); return; }
+     electronicInvoiceWhatsAppNumber = raw;
+     await saveDataToCloud();
+     waNumberInput.value = electronicInvoiceWhatsAppNumber;
+     alert('تم حفظ رقم واتساب الفاتورة الإلكترونية بنجاح.');
+   });
+ }
  const current=()=>getElectronicInvoiceById(select.value);
  search.addEventListener('input',refreshElectronicInvoiceSelect);
  select.addEventListener('change',()=>renderElectronicInvoicePreview(current()));
@@ -1624,4 +1695,4 @@ function printElectronicInvoice(order){
  *{box-sizing:border-box}body{font-family:Arial,Tahoma,sans-serif;padding:12px;color:#32151f;background:#fff}.invoice-print-area{width:740px;max-width:100%;margin:auto;padding:20px;border:1px solid #ead9df;border-radius:10px}.invoice-brand{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #b18a3c;padding-bottom:12px;margin-bottom:14px}.invoice-brand-main{display:flex;align-items:center;gap:10px}.invoice-brand h1{margin:0 0 2px;font-size:18px;color:#6f1735}.invoice-brand p{margin:0;font-size:10px;color:#8b6874}.invoice-number{text-align:left;font-size:11px}.invoice-number strong,.invoice-number span{display:block}.invoice-number span{font-size:15px;font-weight:bold;color:#9a762e;margin-top:3px}.invoice-meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 10px;margin:11px 0;font-size:10px;line-height:1.45}.invoice-meta-full{grid-column:1/-1}.invoice-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px}.invoice-table th,.invoice-table td{border:1px solid #e2d5da;padding:6px 5px;text-align:right}.invoice-table th{background:#f8eef2;color:#6f1735}.invoice-table th:first-child,.invoice-table td:first-child{width:34px;text-align:center}.invoice-table th:nth-child(3),.invoice-table td:nth-child(3){width:65px;text-align:center}.invoice-table th:nth-child(4),.invoice-table td:nth-child(4),.invoice-table th:nth-child(5),.invoice-table td:nth-child(5){width:95px}.invoice-totals{width:245px;margin:11px 0 0 auto;font-size:10px}.invoice-totals>div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}.invoice-grand-total{font-size:13px;font-weight:bold;border-top:2px solid #b18a3c!important;color:#6f1735}.invoice-footer{text-align:center;border-top:1px solid #ddd;margin-top:11px;padding-top:7px;color:#8b6874;font-size:9px}@media print{body{padding:0}.invoice-print-area{border:0;border-radius:0;width:100%;padding:18px}@page{size:A4;margin:10mm}}</style></head><body>${buildElectronicInvoiceHTML(order)}</body></html>`);
  w.document.close();setTimeout(()=>{w.focus();w.print();},500);
 }
-function sendElectronicInvoiceWhatsApp(order){const phone='201107249120';const items=getElectronicInvoiceItems(order),shipping=Number(order.shipping||0),itemsTotal=items.reduce((s,i)=>s+i.lineTotal,0),total=Number(order.total||(itemsTotal+shipping));const text=['🧾 *فاتورة إلكترونية - فيلورا كوسمتكس*',`رقم الفاتورة: #${order.id}`,`العميل: ${order.customerName||''}`,`الهاتف: ${order.phone||''}`,'','*المنتجات:*',...items.map((i,n)=>`${n+1}. ${i.productName} × ${i.qty} = ${i.lineTotal.toFixed(2)} ج.م`),'',`إجمالي المنتجات: ${itemsTotal.toFixed(2)} ج.م`,`الشحن: ${shipping.toFixed(2)} ج.م`,`*الإجمالي الكلي: ${total.toFixed(2)} ج.م*`].join('\n');window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,'_blank','noopener,noreferrer');}
+function sendElectronicInvoiceWhatsApp(order){const phone=normalizeEgyptWhatsAppNumber(electronicInvoiceWhatsAppNumber || '01107249120');const items=getElectronicInvoiceItems(order),shipping=Number(order.shipping||0),itemsTotal=items.reduce((s,i)=>s+i.lineTotal,0),total=Number(order.total||(itemsTotal+shipping));const text=['🧾 *فاتورة إلكترونية - فيلورا كوسمتكس*',`رقم الفاتورة: #${order.id}`,`العميل: ${order.customerName||''}`,`الهاتف: ${order.phone||''}`,'','*المنتجات:*',...items.map((i,n)=>`${n+1}. ${i.productName} × ${i.qty} = ${i.lineTotal.toFixed(2)} ج.م`),'',`إجمالي المنتجات: ${itemsTotal.toFixed(2)} ج.م`,`الشحن: ${shipping.toFixed(2)} ج.م`,`*الإجمالي الكلي: ${total.toFixed(2)} ج.م*`].join('\n');window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,'_blank','noopener,noreferrer');}
